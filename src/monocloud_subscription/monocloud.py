@@ -16,6 +16,10 @@ class AuthenticationError(MonoCloudError):
     """Authentication requires user action rather than automatic login retries."""
 
 
+class OAuthConfigurationError(MonoCloudError):
+    """The server rejected application parameters rather than user credentials."""
+
+
 @dataclass(frozen=True)
 class MonoCloudSettings:
     base_url: str = "https://api.bluecloudworks.com"
@@ -28,14 +32,13 @@ class MonoCloudSettings:
 
 @dataclass(frozen=True)
 class Plan:
-    # The service record ID is the node endpoint's identifier, not plan.id.
-    id: str
+    service_id: str
     name: str
 
 
 @dataclass(frozen=True)
 class Node:
-    plan_id: str
+    service_id: str
     name: str
     server: str
     port: int
@@ -69,9 +72,25 @@ class MonoCloudClient:
             )
         except httpx.RequestError:
             raise MonoCloudError("MonoCloud network request failed.") from None
-        if response.status_code in (401, 403) or (
-            path == "/oauth/token" and response.status_code == 400
-        ):
+        if path == "/oauth/token" and response.status_code in (400, 401):
+            try:
+                body = response.json()
+                oauth_error = body.get("error") if isinstance(body, dict) else None
+            except ValueError:
+                oauth_error = None
+            if oauth_error in (
+                "invalid_client",
+                "invalid_request",
+                "unsupported_grant_type",
+            ):
+                raise OAuthConfigurationError(
+                    "MonoCloud rejected the OAuth application configuration."
+                )
+            if oauth_error == "invalid_grant":
+                raise AuthenticationError(
+                    "Authentication rejected. Sign in again through the web interface."
+                )
+        if response.status_code in (401, 403):
             raise AuthenticationError(
                 "Authentication rejected. Sign in again through the web interface."
             )
@@ -132,20 +151,20 @@ class MonoCloudClient:
         return plans
 
     def fetch_all_nodes(
-        self, token: str, plan_ids: list[str] | None = None
+        self, token: str, service_ids: list[str] | None = None
     ) -> list[Node]:
-        if plan_ids is None:
-            plan_ids = [plan.id for plan in self.fetch_plans(token)]
+        if service_ids is None:
+            service_ids = [plan.service_id for plan in self.fetch_plans(token)]
         nodes = []
-        for plan_id in dict.fromkeys(plan_ids):
-            nodes.extend(self.fetch_nodes(token, plan_id))
+        for service_id in dict.fromkeys(service_ids):
+            nodes.extend(self.fetch_nodes(token, service_id))
         return nodes
 
-    def fetch_nodes(self, token: str, plan_id: str) -> list[Node]:
-        if not plan_id.strip():
-            raise MonoCloudError("A plan ID is required.")
+    def fetch_nodes(self, token: str, service_id: str) -> list[Node]:
+        if not service_id.strip():
+            raise MonoCloudError("A service ID is required.")
         values = self._request(
-            "GET", f"/api/shadowsocks/{quote(plan_id, safe='')}", token=token
+            "GET", f"/api/shadowsocks/{quote(service_id, safe='')}", token=token
         )
         if not isinstance(values, list):
             raise MonoCloudError("Unexpected node response: expected a JSON array.")
@@ -171,7 +190,7 @@ class MonoCloudClient:
             )
             nodes.append(
                 Node(
-                    plan_id,
+                    service_id,
                     name,
                     value["hostname"],
                     port,

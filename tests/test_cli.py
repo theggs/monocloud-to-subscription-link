@@ -1,8 +1,10 @@
+import io
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from unittest.mock import patch
 
@@ -52,6 +54,23 @@ class CliTests(unittest.TestCase):
             run.call_args.kwargs,
             {"host": "127.0.0.1", "port": 8081, "access_log": False},
         )
+
+    def test_remote_binding_warns_about_plaintext_credentials(self):
+        self.path.write_text('data_dir = "data"', encoding="utf-8")
+        output = io.StringIO()
+        with (
+            patch.dict(
+                os.environ, {"MONOCLOUD_WEB_PASSWORD": "fake-management-password"}
+            ),
+            patch("uvicorn.run"),
+            redirect_stderr(output),
+        ):
+            self.assertEqual(
+                main(["--config", str(self.path), "serve", "--host", "0.0.0.0"]), 0
+            )
+        self.assertIn("http://0.0.0.0:8080", output.getvalue())
+        self.assertIn("does not encrypt", output.getvalue())
+        self.assertNotIn("fake-management-password", output.getvalue())
 
     def test_check_from_another_directory_is_read_only(self):
         self.path.write_text('data_dir = "data"', encoding="utf-8")

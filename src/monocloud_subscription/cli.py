@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import sys
 from pathlib import Path
 
 from monocloud_subscription.config import load_config
@@ -47,6 +48,14 @@ def main(argv: list[str] | None = None) -> int:
                 )
             if not 1 <= args.port <= 65535:
                 raise ValueError("Port must be between 1 and 65535.")
+            host = f"[{args.host}]" if ":" in args.host else args.host
+            print(f"Listen URL: http://{host}:{args.port}", file=sys.stderr)
+            if args.host not in ("127.0.0.1", "localhost", "::1"):
+                print(
+                    "WARNING: Remote HTTP does not encrypt account or management credentials. "
+                    "Use an HTTPS reverse proxy before remote browser access.",
+                    file=sys.stderr,
+                )
             app = create_app(config, admin_password=management_password)
             uvicorn.run(app, host=args.host, port=args.port, access_log=False)
             return 0

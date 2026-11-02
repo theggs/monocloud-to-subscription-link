@@ -68,7 +68,7 @@ class MonoCloudTests(unittest.TestCase):
         self.assertEqual(nodes[0].cipher, "chacha20-ietf-poly1305")
         self.assertEqual(nodes[0].password, "test-node-secret")
         self.assertEqual(nodes[0].name, "Example")
-        self.assertEqual(nodes[0].plan_id, "123")
+        self.assertEqual(nodes[0].service_id, "123")
         self.assertNotIn("test-node-secret", repr(nodes[0]))
         self.assertNotIn("test-client-secret", repr(api.settings))
         request = self.requests[0]
@@ -89,7 +89,11 @@ class MonoCloudTests(unittest.TestCase):
                 self.assertNotIn("remote-private-value", str(caught.exception))
 
     def test_failed_login_is_actionable(self):
-        api = self.client(httpx.Response(400, json={"message": "private-response"}))
+        api = self.client(
+            httpx.Response(
+                400, json={"error": "invalid_grant", "message": "private-response"}
+            )
+        )
         with self.assertRaisesRegex(AuthenticationError, "web interface"):
             api.login("user@example.invalid", "test-password")
         self.assertEqual(len(self.requests), 1)
@@ -153,7 +157,7 @@ class MonoCloudTests(unittest.TestCase):
         )
         plans = api.fetch_plans("test-token")
         self.assertEqual(
-            [(plan.id, plan.name) for plan in plans], [("123", "Example plan")]
+            [(plan.service_id, plan.name) for plan in plans], [("123", "Example plan")]
         )
         self.assertEqual(self.requests[0].url.path, "/api/service")
 
@@ -201,7 +205,7 @@ class MonoCloudTests(unittest.TestCase):
             nodes = MonoCloudClient(MonoCloudSettings(), http).fetch_all_nodes(
                 "test-token"
             )
-        self.assertEqual([node.plan_id for node in nodes], ["123", "124"])
+        self.assertEqual([node.service_id for node in nodes], ["123", "124"])
         self.assertEqual(
             paths, ["/api/service", "/api/shadowsocks/123", "/api/shadowsocks/124"]
         )

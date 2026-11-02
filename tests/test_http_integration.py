@@ -110,7 +110,7 @@ class HttpIntegrationTests(unittest.TestCase):
             store.save(api.login("user@example.invalid", "fake-account-password"))
             nodes = api.fetch_all_nodes(store.load())
         self.assertEqual(len(nodes), 1)
-        self.assertEqual(nodes[0].plan_id, "123")
+        self.assertEqual(nodes[0].service_id, "123")
         self.assertEqual(nodes[0].password, "fake-node-password")
         self.assertEqual(
             self.server.requests,

@@ -16,10 +16,12 @@ Keep token storage in a local JSON file; an external secrets service is unnecess
   client_id, client_secret; expect a nonempty access_token.
 - `GET /api/service`: a top-level array of service records. Use outer `id` for
   node requests, not product `plan_id` or nested `plan.id`; select Shadowsocks plans.
-- `GET /api/shadowsocks/{plan_id}`: Bearer authorization, JSON accept header,
+- `GET /api/shadowsocks/{service_id}`: Bearer authorization, JSON accept header,
   configurable User-Agent and optional X-Client-Version.
 - Preserve hostname, port, encryption, password, alias, and plan association in
   the shared node model. Skip explicitly disabled nodes; validate required fields.
+- Use `Plan.service_id` and `Node.service_id` so product plan IDs cannot be
+  confused with service-record IDs by future configuration generators.
 - Account interaction is browser-only. Keep only service startup and read-only
   configuration checking in the command-line entry point. Do not expose login,
   token import, plan listing, or node retrieval as CLI commands. Shared API methods

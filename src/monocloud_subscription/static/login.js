@@ -70,6 +70,7 @@ form.addEventListener("submit", async (event) => {
       const errors = {
         login_rejected: "登录未通过，请检查邮箱和密码后重试。",
         oauth_not_configured: "当前服务尚未配置登录参数，请联系部署者完成配置。",
+        oauth_client_rejected: "服务的 MonoCloud 登录参数被拒绝，请联系部署者检查配置。",
         invalid_login_input: "请输入有效的邮箱与密码。",
         upstream_unavailable: "暂时无法连接 MonoCloud，请稍后重试。",
         token_save_failed: "登录验证已通过，但凭据保存失败，请检查服务的存储权限。",

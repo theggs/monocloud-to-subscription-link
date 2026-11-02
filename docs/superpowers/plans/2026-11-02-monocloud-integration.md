@@ -35,7 +35,7 @@
 ## Task 2: API calls and shared node model
 
 **Files:** `src/monocloud_subscription/monocloud.py`, `tests/test_monocloud.py`, `pyproject.toml`, `uv.lock`.
-**Interfaces:** `MonoCloudClient(settings, http).login(...) -> str`, `.fetch_nodes(token, plan_id) -> list[Node]`.
+**Interfaces:** `MonoCloudClient(settings, http).login(...) -> str`, `.fetch_nodes(token, service_id) -> list[Node]`. Both Plan and Node expose service_id.
 
 - [x] Add httpx and deterministic MockTransport tests for exact request headers/forms, node mapping, disabled nodes, malformed responses, sanitized errors, and no authentication retry.
 - [x] Run tests red, implement client/model, then run full suite green.

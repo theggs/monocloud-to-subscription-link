@@ -66,9 +66,17 @@ address. Binding beyond loopback requires a `MONOCLOUD_WEB_PASSWORD` environment
 variable; browsers then prompt for username `admin` and that management password.
 This password controls access to the login page and is distinct from your MonoCloud
 account password. Supply it through your deployment's private environment, not
-committed configuration or command-line arguments. Use HTTPS when exposing login
-over an untrusted network; TLS termination remains a deployment choice. Request
-access logs are disabled. This page implements only account login for issue #2.
+committed configuration or command-line arguments. Remote HTTP transmits both
+account and management credentials without encryption, including over LAN/Wi-Fi.
+The service prints its listen URL and warns when binding beyond loopback. Use
+HTTPS for remote browser access; TLS termination remains a deployment choice.
+
+When using an HTTPS reverse proxy, forward the original `Host` and set
+`X-Forwarded-Proto`. Uvicorn trusts forwarded headers from loopback by default;
+if the proxy runs elsewhere, set `FORWARDED_ALLOW_IPS` to its specific trusted
+address. Do not trust arbitrary client-supplied forwarded headers. The Origin
+check still requires matching scheme, hostname and effective port. Request access
+logs are disabled. This page implements only account login for issue #2.
 
 Account interaction is available through the browser page. The command-line
 entry point is limited to starting the service and checking configuration.
@@ -104,7 +112,9 @@ command from another directory.
 Keep private research, personal configuration, future credentials, and runtime
 data in `.local/`, which Git ignores. An external private directory is equally
 valid. On POSIX systems new token files have owner-only permissions; token updates
-replace the file atomically. Browser login saves only the returned access token; passwords and raw
+replace the file atomically. Existing directory permissions are left unchanged;
+deployers should restrict private configuration and data directories. Atomic
+replacement is not a power-loss durability guarantee. Browser login saves only the returned access token; passwords and raw
 API responses are not persisted. Local configuration containing OAuth client secrets
 should also be readable only by its owner. Do not put real credentials or generated
 subscriptions in tracked files or issue reports.
