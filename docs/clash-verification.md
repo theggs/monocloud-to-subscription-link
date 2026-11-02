@@ -72,9 +72,10 @@ Constructed-data browser tests verified copy, download, toggle save/reload and a
 key live only in ignored private files. Device tests above remain pending; the
 user's stated Clash Mi version is 1.0.31.1703. Those tests now belong to #4.
 
-A current LAN transport limitation is not yet resolved: loopback HTTP returns the
-expected management 401 and authenticated downloads succeed, but connections to
-the host's LAN address are closed/reset (also reproduced from a LAN peer). The
-same LAN Host header over loopback succeeds, so this is not an application Host
-authorization failure. No system firewall, network filter or remote configuration
-was changed. Phone import cannot be claimed until LAN reachability is established.
+The initial LAN connection reset was traced to a macOS firewall rule blocking
+incoming connections to the exact Python executable (checking its app bundle
+alone did not reveal that rule). After the user allowed incoming connections,
+LAN requests from both this host and a LAN peer return the expected management
+401. Authenticated LAN management and native URL-credential downloads also work;
+the generated configuration was checked without printing credentials. No remote
+configuration was modified. Phone import and traffic behavior remain pending.
