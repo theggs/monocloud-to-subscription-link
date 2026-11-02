@@ -75,3 +75,47 @@ user_agent = "example-agent"
                 with self.assertRaises(ValueError) as caught:
                     load_config(self.path)
                 self.assertNotIn("private-value", str(caught.exception))
+
+    def test_tailscale_is_optional_and_paths_belong_to_the_client(self):
+        self.path.write_text('data_dir = "data"\n', encoding="utf-8")
+        config = load_config(self.path)
+        self.assertFalse(config.tailscale.enabled)
+        self.assertEqual(config.clash.mixed_port, 7890)
+        self.path.write_text(
+            """data_dir = "data"
+[clash]
+mixed_port = 7891
+[tailscale]
+enabled = true
+hostname = "example-phone"
+state_dir = "client-state"
+auth_key = "constructed-private-key"
+routes = ["192.168.50.0/24", "fd00:1234::/64"]
+""",
+            encoding="utf-8",
+        )
+        config = load_config(self.path)
+        self.assertTrue(config.tailscale.enabled)
+        self.assertEqual(config.tailscale.state_dir, "client-state")
+        self.assertEqual(config.tailscale.routes, ("192.168.50.0/24", "fd00:1234::/64"))
+        self.assertEqual(config.clash.mixed_port, 7891)
+        self.assertNotIn("constructed-private-key", repr(config))
+
+    def test_invalid_generator_options_are_sanitized(self):
+        for options in (
+            "clash = false",
+            "[clash]\nmixed_port = true",
+            "[clash]\nmixed_port = 65536",
+            'tailscale = "private-value"',
+            '[tailscale]\nenabled = "true"',
+            '[tailscale]\nstate_dir = ""',
+            "[tailscale]\nauth_key = 123",
+            '[tailscale]\nroutes = ["private-value"]',
+            '[tailscale]\nroutes = ["0.0.0.0/0"]',
+            '[tailscale]\ncontrol_url = "http://private-value"',
+        ):
+            with self.subTest(options=options):
+                self.path.write_text('data_dir = "data"\n' + options, encoding="utf-8")
+                with self.assertRaises(ValueError) as caught:
+                    load_config(self.path)
+                self.assertNotIn("private-value", str(caught.exception))
