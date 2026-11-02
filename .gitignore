@@ -1,0 +1,10 @@
+# Private research and machine-specific local files.
+/.local/
+
+# Python environments, caches, and build output.
+/.venv/
+__pycache__/
+*.py[cod]
+/.ruff_cache/
+/dist/
+*.egg-info/
