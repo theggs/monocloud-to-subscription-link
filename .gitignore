@@ -8,3 +8,7 @@ __pycache__/
 /.ruff_cache/
 /dist/
 *.egg-info/
+
+# Browser verification artifacts.
+/.playwright-cli/
+/output/playwright/

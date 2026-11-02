@@ -15,8 +15,8 @@ Tailscale. Tailscale-specific routes and DNS settings are included only when ena
 service discovery, and node retrieval are implemented. The complete account workflow
 is tested against a local HTTP server using constructed credentials. Read-only live
 queries also confirmed the service/node response structures. Fresh OAuth login
-against MonoCloud is pending. Subscription generation, Tailscale integration, and
-HTTP serving are not implemented yet.
+against MonoCloud is pending. A browser login page is available; subscription
+generation, Tailscale integration, and subscription downloads are not implemented yet.
 
 ## Requirements and installation
 
@@ -31,8 +31,8 @@ uv sync --locked
 uv run monocloud-subscription --help
 ```
 
-uv creates a project-specific `.venv/`. HTTP requests use httpx; Ruff is a
-development dependency.
+uv creates a project-specific `.venv/`. HTTP requests use httpx. FastAPI and Uvicorn
+serve the login page; Ruff is a development dependency.
 
 ## Quick start
 
@@ -47,6 +47,28 @@ uv run monocloud-subscription --config .local/config.toml check
 The command prints `Configuration OK` and the configured data directory, then
 exits successfully. It does not create the directory, write credentials, contact
 MonoCloud, or start a server. A configuration error exits with status 2.
+
+For browser login, configure the private OAuth client parameters described below,
+then start the login page:
+
+```sh
+uv run monocloud-subscription --config .local/config.toml serve
+```
+
+Open [http://127.0.0.1:8080](http://127.0.0.1:8080), enter your account email and
+password, and submit the form. The page shows pending/success/error states and
+whether a token is already saved. It does not display tokens or OAuth client
+secrets. Failed login preserves the previous token. The password is cleared from
+the form after each attempt and is not stored by the application.
+
+The server defaults to loopback. Use `--host` and `--port` to select a listen
+address. Binding beyond loopback requires a `MONOCLOUD_WEB_PASSWORD` environment
+variable; browsers then prompt for username `admin` and that management password.
+This password controls access to the login page and is distinct from your MonoCloud
+account password. Supply it through your deployment's private environment, not
+committed configuration or command-line arguments. Use HTTPS when exposing login
+over an untrusted network; TLS termination remains a deployment choice. Request
+access logs are disabled. This page implements only account login for issue #2.
 
 To use an existing access token, run this in an interactive terminal and paste
 the token at the hidden prompt:

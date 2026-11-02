@@ -39,6 +39,26 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("check", result.stdout)
 
+    def test_external_web_binding_requires_management_password(self):
+        self.path.write_text('data_dir = "data"', encoding="utf-8")
+        with patch.dict(os.environ, {"MONOCLOUD_WEB_PASSWORD": ""}):
+            result = self.run_cli(
+                "--config", str(self.path), "serve", "--host", "0.0.0.0"
+            )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("MONOCLOUD_WEB_PASSWORD", result.stderr)
+
+    def test_web_serve_uses_configured_address_without_access_logs(self):
+        self.path.write_text('data_dir = "data"', encoding="utf-8")
+        with patch("uvicorn.run") as run:
+            self.assertEqual(
+                main(["--config", str(self.path), "serve", "--port", "8081"]), 0
+            )
+        self.assertEqual(
+            run.call_args.kwargs,
+            {"host": "127.0.0.1", "port": 8081, "access_log": False},
+        )
+
     def test_check_from_another_directory_is_read_only(self):
         self.path.write_text('data_dir = "data"', encoding="utf-8")
         result = self.run_cli("--config", str(self.path), "check")
