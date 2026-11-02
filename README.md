@@ -13,9 +13,9 @@ Tailscale. Tailscale-specific routes and DNS settings are included only when ena
 
 **Current status:** configuration checks, local token storage, password-grant login,
 service discovery, and node retrieval are implemented. The complete account workflow
-is tested against a local HTTP server using constructed credentials. Read-only live
-queries also confirmed the service/node response structures. Fresh OAuth login
-against MonoCloud is pending. A browser login page is available; subscription
+is tested against a local HTTP server using constructed credentials. Browser login
+and reuse of its saved token for service/node discovery have also been verified
+against MonoCloud. A browser login page is available; subscription
 generation, Tailscale integration, and subscription downloads are not implemented yet.
 
 ## Requirements and installation
@@ -108,9 +108,10 @@ login or token import; it does not trigger automatic login retries.
 form and embedded OAuth client-credential source. Read-only GET requests using an
 existing session confirmed `/api/service`, `/api/shadowsocks/{service_id}`, their
 array responses, field types, and request identity. Tests use constructed data with
-the confirmed structure, without real account or node values. Fresh login and the
-project's transport against the real MonoCloud service remain unverified. Local
-HTTP integration tests cover login, token persistence, and discovery. Configure OAuth client
+the confirmed structure, without real account or node values. The user completed
+browser login, and the project reused its saved token for read-only service/node
+queries against the real API. Local HTTP integration tests also cover login,
+token persistence, discovery, and authentication failures. Configure OAuth client
 credentials privately; no client secrets are bundled.
 
 ## Configuration and private data

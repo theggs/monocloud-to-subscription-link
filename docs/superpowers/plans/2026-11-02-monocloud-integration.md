@@ -61,5 +61,6 @@
 - The suite reached 33 passing tests after service discovery; incremental independent review passed.
 - The final suite has 38 passing tests, including real loopback HTTP login/save/reuse/discovery, rejected-token handling, and successful CLI import/plans/nodes. Lint, formatting, and distribution builds passed.
 - A proposed raw-response relay to the local process was rejected by automatic approval and was not executed. The temporary relay script was removed; no raw responses or live tokens were transferred locally.
-- Pending: fresh OAuth login and project HTTP transport against the actual MonoCloud service. Local integration tests use fabricated credentials. No real login, refresh, remote configuration write, service restart, or node connection was performed.
-- Issue #2 remains open pending production login acceptance; submit the verified implementation on codex/monocloud-integration for draft review.
+- Live acceptance is now complete: the user submitted real browser login, and the project successfully reused the returned token for read-only service/node discovery. No account or node secrets are recorded here.
+- Local integration tests use fabricated credentials. No remote configuration writes, token refreshes, or proxy-node connections were performed.
+- Mark PR #8 ready for review; keep issue #2 open until merge.

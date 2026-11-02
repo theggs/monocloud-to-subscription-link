@@ -37,11 +37,13 @@ is User-Agent MonocloudGO-1.0.1 with X-Client-Version 1.0.1; both are configurab
 OAuth client constants were located in the binary but are not bundled in source,
 examples, or issues. Tests use constructed values matching observed structures.
 The real HTTP transport workflow is verified against a local fixture server using
-constructed credentials. Fresh login and project transport against the real
-MonoCloud service remain unverified.
+constructed credentials. The user subsequently completed real browser login; the
+project reused the saved token for successful service/node discovery against the
+real MonoCloud API. Only sanitized outcomes are recorded.
 
 The user subsequently authorized reading the existing client and reusing its
 session for read-only GET investigation. No remote files, configuration, services,
-or account state were intentionally modified. Real tokens and raw node responses
-are not transferred to local storage. Fresh login requires separate validation;
-issue #2 stays open until its remaining acceptance criteria are met.
+or account state were intentionally modified. Investigation did not transfer
+workstation tokens or raw node responses locally. The project's own browser login
+now stores its returned token privately as designed. Fresh login and project API
+retrieval are verified; keep issue #2 open until the reviewed change is merged.
