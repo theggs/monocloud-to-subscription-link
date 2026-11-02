@@ -37,6 +37,10 @@ Real-node private outputs were also generated from read-only discovery with the
 saved browser-login token and the verified official bytes above. Both passed the
 same core check; no node identities or credentials are included in this record.
 
+Review regressions cover redirect rejection on both downloads, unsupported
+top-level options/modes, malformed DNS mutation fields, and preservation of
+existing IP-based bootstrap DNS. The template still passes those constraints.
+
 ## Clash Mi acceptance still required
 
 | Scenario | Required result | Status |

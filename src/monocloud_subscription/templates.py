@@ -1,6 +1,7 @@
 """Download and verify MonoCloud's official Shadowsocks routing template."""
 
 import hashlib
+from ipaddress import ip_address
 from urllib.parse import urlsplit
 
 import httpx
@@ -14,6 +15,21 @@ MANIFEST_URL = "https://static.monocloud.co/mono_go/update.json"
 def validate_template(template: object) -> dict:
     if not isinstance(template, dict):
         raise ValueError("Unsupported MonoCloud template structure.")
+    allowed = {
+        "mixed-port",
+        "allow-lan",
+        "mode",
+        "log-level",
+        "dns",
+        "proxies",
+        "proxy-groups",
+        "rules",
+    }
+    if template.keys() - allowed or template.get("mode", "rule") not in (
+        "rule",
+        "Rule",
+    ):
+        raise ValueError("Unsupported MonoCloud template options or mode.")
     groups = template.get("proxy-groups")
     rules = template.get("rules")
     if (
@@ -28,6 +44,28 @@ def validate_template(template: object) -> dict:
         or rules[-1] != "MATCH,Proxy"
     ):
         raise ValueError("Unsupported MonoCloud template structure.")
+    dns = template["dns"]
+    if "nameserver-policy" in dns and not isinstance(dns["nameserver-policy"], dict):
+        raise ValueError("Invalid MonoCloud template DNS policy.")
+    if "fake-ip-filter" in dns and (
+        not isinstance(dns["fake-ip-filter"], list)
+        or any(not isinstance(item, str) for item in dns["fake-ip-filter"])
+    ):
+        raise ValueError("Invalid MonoCloud template fake-IP filter.")
+    if "default-nameserver" in dns:
+        resolvers = dns["default-nameserver"]
+        try:
+            if not isinstance(resolvers, list) or not resolvers:
+                raise ValueError
+            for resolver in resolvers:
+                if not isinstance(resolver, str):
+                    raise ValueError
+                host = urlsplit(resolver).hostname if "://" in resolver else resolver
+                ip_address(host)
+        except ValueError:
+            raise ValueError(
+                "Template bootstrap DNS must use IP-based resolvers."
+            ) from None
     for rule in rules:
         if not isinstance(rule, str):
             raise ValueError("Invalid MonoCloud template rule.")
@@ -47,7 +85,7 @@ def fetch_template(http: httpx.Client, settings: MonoCloudSettings) -> dict:
     headers = {"User-Agent": settings.user_agent}
     try:
         response = http.get(
-            MANIFEST_URL, headers=headers, timeout=20, follow_redirects=True
+            MANIFEST_URL, headers=headers, timeout=20, follow_redirects=False
         )
         response.raise_for_status()
         manifest = response.json()
@@ -59,7 +97,7 @@ def fetch_template(http: httpx.Client, settings: MonoCloudSettings) -> dict:
         if url.scheme != "https" or not url.hostname or url.username or url.password:
             raise ValueError
         asset = http.get(
-            entry["url"], headers=headers, timeout=20, follow_redirects=True
+            entry["url"], headers=headers, timeout=20, follow_redirects=False
         )
         asset.raise_for_status()
         if (

@@ -112,7 +112,7 @@ Configuration uses TOML. Supply its path explicitly with `--config`.
 | `tailscale.state_dir` | No | Persistent path on the **client**, default `tailscale`. Never resolved against the server's configuration path. |
 | `tailscale.auth_key` | No | Private authorization key; omitted from output if unset. The core then logs a login URL. |
 | `tailscale.control_url` | No | Custom HTTPS control server URL, such as Headscale. |
-| `tailscale.routes` | No | Explicit subnet CIDRs advertised and authorized in the Tailnet; default empty. No exit node or default route is configured. |
+| `tailscale.routes` | No | Subnets the client should reach via the Tailnet; they must be advertised and authorized on other Tailnet devices. Default empty; no exit node or default route is configured. |
 
 With `.local/config.toml` and `data_dir = "data"`, the runtime data location is
 `.local/data/`, regardless of the process working directory. Absolute paths are
@@ -130,7 +130,9 @@ should also be readable only by its owner. Do not put real credentials or genera
 subscriptions in tracked files or issue reports.
 
 When enabled, Tailscale uses the selected MonoCloud node for control/DERP
-connections. Independent bootstrap DNS resolves proxy nodes. Tailnet IPv4/IPv6
+connections. Existing IP-based bootstrap DNS is preserved; when absent, `223.5.5.5` and
+`119.29.29.29` are supplied. Hostname-dependent bootstrap settings are rejected.
+Independent bootstrap DNS resolves proxy nodes. Tailnet IPv4/IPv6
 and `*.ts.net` FQDNs route to Tailscale before the official LAN rules; Tailnet
 DNS uses the outbound's own resolver. Short MagicDNS names without the Tailnet
 suffix are not configured. Subnet routes require both a client configuration
@@ -184,7 +186,9 @@ with httpx.Client() as http:
 
 Generation loads the saved browser-login token, fetches all available Shadowsocks
 nodes, downloads the official `Clash_ss` template from its update manifest, and
-checks its size and SHA-256 before parsing. It preserves the official rule order
+checks its size and SHA-256 before parsing. Manifest and asset redirects are
+rejected, including HTTPS-to-HTTP redirects. Unexpected top-level template options
+and non-rule routing modes are rejected rather than copied into the client. It preserves the official rule order
 and provides one manual `Proxy` group containing every node. Name collisions are
 renamed deterministically; automatic switching is not enabled. Failure raises a
 sanitized `ValueError` without writing output. The asset host must be reachable

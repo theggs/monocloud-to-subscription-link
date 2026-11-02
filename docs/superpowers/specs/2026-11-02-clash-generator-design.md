@@ -19,6 +19,14 @@ Replace the sample proxy with all enabled API nodes and a manual `Proxy` select
 group. Give collisions deterministic unique names, including names that collide
 with built-in policies. Do not add automatic switching. Retain official DNS,
 with explicit direct bootstrap DNS independent of the proxy/Tailscale chain.
+Existing IP-based default-nameserver entries (plain or encrypted) are preserved;
+only an absent setting gets the two IP defaults. Non-IP bootstrap entries fail
+validation instead of silently replacing vendor policy. Manifest and resource
+requests do not follow redirects. The supported top-level template fields are
+mixed-port, allow-lan, mode, log-level, dns, proxies, proxy-groups and rules; unknown
+fields or non-rule mode fail explicitly. DNS policy/filter shapes are checked
+before mutation.
+
 Local configuration selects the mixed port; LAN exposure defaults to disabled.
 
 ## Optional Tailscale

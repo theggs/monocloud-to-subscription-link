@@ -226,3 +226,130 @@ class ClashTests(unittest.TestCase):
         self.assertNotIn("exit-node", result["proxies"][-1])
         disabled = self.render(tailscale=TailscaleSettings(auth_key="unused"))
         self.assertNotIn("unused", str(disabled))
+
+
+class ReviewRegressionTests(unittest.TestCase):
+    def template(self):
+        with template_client() as http:
+            return fetch_template(http, MonoCloudSettings())
+
+    def test_manifest_and_asset_redirects_are_rejected_before_following(self):
+        for redirect_manifest in (True, False):
+            for destination in (
+                "http://untrusted.invalid/resource",
+                "https://other.invalid/resource",
+            ):
+                seen = []
+
+                def handle(request):
+                    seen.append(str(request.url))
+                    manifest = request.url.path.endswith("update.json")
+                    if manifest == redirect_manifest:
+                        return httpx.Response(302, headers={"Location": destination})
+                    return httpx.Response(
+                        200,
+                        json={
+                            "templates": [
+                                {
+                                    "name": "Clash_ss",
+                                    "url": "https://static.example.invalid/Clash_ss",
+                                    "size": len(TEMPLATE),
+                                    "sha256": hashlib.sha256(TEMPLATE).hexdigest(),
+                                }
+                            ]
+                        },
+                    )
+
+                with (
+                    self.subTest(manifest=redirect_manifest, destination=destination),
+                    httpx.Client(
+                        transport=httpx.MockTransport(handle), follow_redirects=True
+                    ) as http,
+                ):
+                    with self.assertRaises(ValueError):
+                        fetch_template(http, MonoCloudSettings())
+                    self.assertNotIn(destination, seen)
+                    self.assertEqual(len(seen), 1 if redirect_manifest else 2)
+
+    def test_unexpected_top_level_options_and_non_rule_mode_are_rejected(self):
+        from monocloud_subscription.templates import validate_template
+
+        for key in (
+            "external-controller",
+            "listeners",
+            "tun",
+            "proxy-providers",
+            "rule-providers",
+            "authentication",
+            "unknown-option",
+        ):
+            template = self.template()
+            template[key] = "private-value"
+            with self.subTest(key=key), self.assertRaises(ValueError) as caught:
+                validate_template(template)
+            self.assertNotIn("private-value", str(caught.exception))
+        for mode in ("global", "direct", [], None):
+            template = self.template()
+            template["mode"] = mode
+            with self.subTest(mode=mode), self.assertRaises(ValueError):
+                validate_template(template)
+
+    def test_dns_mutation_shapes_raise_sanitized_errors_in_both_modes(self):
+        for key, value in (
+            ("nameserver-policy", []),
+            ("nameserver-policy", None),
+            ("fake-ip-filter", {}),
+            ("fake-ip-filter", "private-value"),
+            ("fake-ip-filter", [42]),
+        ):
+            for enabled in (False, True):
+                template = self.template()
+                template["dns"][key] = value
+                with (
+                    self.subTest(key=key, enabled=enabled),
+                    self.assertRaises(ValueError) as caught,
+                ):
+                    generate_clash(
+                        template,
+                        [node()],
+                        ClashSettings(),
+                        TailscaleSettings(enabled=enabled),
+                    )
+                self.assertNotIn("private-value", str(caught.exception))
+
+    def test_existing_ip_bootstrap_dns_is_preserved_in_both_modes(self):
+        resolvers = [
+            "9.9.9.9",
+            "https://1.1.1.1/dns-query",
+            "tls://[2606:4700:4700::1111]",
+        ]
+        for enabled in (False, True):
+            template = self.template()
+            template["dns"]["default-nameserver"] = resolvers.copy()
+            result = yaml.safe_load(
+                generate_clash(
+                    template,
+                    [node()],
+                    ClashSettings(),
+                    TailscaleSettings(enabled=enabled),
+                )
+            )
+            self.assertEqual(result["dns"]["default-nameserver"], resolvers)
+            self.assertEqual(template["dns"]["default-nameserver"], resolvers)
+
+    def test_non_ip_bootstrap_dns_is_rejected_without_echoing_values(self):
+        for resolvers in (
+            [],
+            "private-value",
+            ["dns.private-value"],
+            ["https://dns.private-value/query"],
+            [None],
+        ):
+            template = self.template()
+            template["dns"]["default-nameserver"] = resolvers
+            with (
+                self.subTest(resolvers=resolvers),
+                self.assertRaises(ValueError) as caught,
+            ):
+                generate_clash(template, [node()], ClashSettings(), TailscaleSettings())
+            self.assertNotIn("private-value", str(caught.exception))

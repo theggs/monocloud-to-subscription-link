@@ -74,8 +74,9 @@ def generate_clash(
         }
     ]
     dns = result["dns"]
-    # IP-only resolvers keep bootstrap independent of both outbounds.
-    dns["default-nameserver"] = ["223.5.5.5", "119.29.29.29"]
+    # Preserve the official IP-based bootstrap policy, adding a default only
+    # when absent. Validation rejects a hostname-dependent bootstrap chain.
+    dns.setdefault("default-nameserver", ["223.5.5.5", "119.29.29.29"])
     # Official proxy-server DNS already uses IP-based resolvers, including
     # encrypted DNS. Preserve that policy rather than downgrading it to UDP.
     dns.setdefault("proxy-server-nameserver", ["223.5.5.5", "119.29.29.29"])
