@@ -114,6 +114,34 @@ class CliTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 2)
         run.assert_not_called()
 
+    def test_serve_rejects_urls_ports_paths_and_unbalanced_ipv6(self):
+        self.path.write_text('data_dir = "data"', encoding="utf-8")
+        for value in (
+            "example.com:8080",
+            "127.0.0.1:8080",
+            "[::1",
+            "::1]",
+            "https://example.invalid",
+            "example.invalid/path",
+        ):
+            with self.subTest(host=value):
+                output = io.StringIO()
+                with (
+                    patch.dict(
+                        os.environ,
+                        {"MONOCLOUD_WEB_PASSWORD": "fake-management-password"},
+                    ),
+                    patch("uvicorn.run") as run,
+                    redirect_stderr(output),
+                ):
+                    with self.assertRaises(SystemExit) as caught:
+                        main(["--config", str(self.path), "serve", "--host", value])
+                self.assertEqual(caught.exception.code, 2)
+                self.assertIn(
+                    "Host must be a hostname or IP address", output.getvalue()
+                )
+                run.assert_not_called()
+
     def test_invalid_config_returns_a_concise_error(self):
         self.path.write_text("secret-value = [invalid", encoding="utf-8")
         result = self.run_cli("--config", str(self.path), "check")

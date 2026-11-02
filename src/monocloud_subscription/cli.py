@@ -3,6 +3,7 @@
 import argparse
 import os
 import sys
+from ipaddress import IPv6Address
 from pathlib import Path
 
 from monocloud_subscription.config import load_config
@@ -43,6 +44,15 @@ def main(argv: list[str] | None = None) -> int:
                 bind_host = bind_host[1:-1].strip()
             if not bind_host:
                 raise ValueError("Host must not be empty.")
+            try:
+                if any(character in bind_host for character in "/?#@[]"):
+                    raise ValueError
+                if ":" in bind_host:
+                    IPv6Address(bind_host)
+            except ValueError:
+                raise ValueError(
+                    "Host must be a hostname or IP address without a scheme, port, or path."
+                ) from None
             loopback = bind_host in ("127.0.0.1", "localhost", "::1")
             management_password = os.environ.get("MONOCLOUD_WEB_PASSWORD")
             if not loopback and not management_password:
