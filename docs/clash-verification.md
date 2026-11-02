@@ -79,3 +79,27 @@ LAN requests from both this host and a LAN peer return the expected management
 401. Authenticated LAN management and native URL-credential downloads also work;
 the generated configuration was checked without printing credentials. No remote
 configuration was modified. Phone import and traffic behavior remain pending.
+
+## Clash Mi device session (2026-11-02)
+
+User-reported app version: **1.0.31.1703**. After connecting the iPhone to Wi-Fi,
+the management page became reachable. The user confirmed the MonoCloud-only URL
+import/connect flow and successful access to **google.com** and **baidu.com**.
+This establishes basic proxy and ordinary domain resolution behavior on the device.
+The user also confirmed manual node switching and explicit subscription refresh
+with successful proxy access afterward. Tailscale-enabled behavior and persistence
+after restart are still pending. The earlier post-firewall phone
+failure was caused by the phone not being connected to Wi-Fi.
+
+Before testing interactive Tailscale authorization, source inspection confirmed
+that mihomo v1.19.32 forwards tsnet user messages (including the login URL) to its
+info logger. Enabled output without an auth key now raises an otherwise hidden
+warning/error/silent log level to info; other modes retain the official level.
+A regression test verifies that behavior. This is a fallback visibility measure,
+not an implementation of automatic browser launching in Clash Mi.
+
+The public Clash Mi v1.0.31.1703 client sources examined did not reveal a dedicated
+Tailscale authorization UI handler. Its pubspec references a local
+libclash-vpn-service dependency, so public source inspection does not establish
+every behavior of the shipped binary. Whether the app automatically opens the
+authorization page is being tested on the device, not assumed.

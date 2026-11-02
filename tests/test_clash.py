@@ -353,3 +353,25 @@ class ReviewRegressionTests(unittest.TestCase):
             ):
                 generate_clash(template, [node()], ClashSettings(), TailscaleSettings())
             self.assertNotIn("private-value", str(caught.exception))
+
+
+class InteractiveAuthorizationTests(unittest.TestCase):
+    def test_interactive_tailscale_authorization_is_not_hidden_by_error_logging(self):
+        with template_client() as http:
+            template = fetch_template(http, MonoCloudSettings())
+        template["log-level"] = "error"
+        interactive = yaml.safe_load(
+            generate_clash(
+                template, [node()], ClashSettings(), TailscaleSettings(enabled=True)
+            )
+        )
+        self.assertEqual(interactive["log-level"], "info")
+        for settings in (
+            TailscaleSettings(),
+            TailscaleSettings(enabled=True, auth_key="constructed-key"),
+        ):
+            result = yaml.safe_load(
+                generate_clash(template, [node()], ClashSettings(), settings)
+            )
+            self.assertEqual(result["log-level"], "error")
+        self.assertEqual(template["log-level"], "error")

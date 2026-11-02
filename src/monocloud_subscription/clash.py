@@ -81,6 +81,14 @@ def generate_clash(
     # encrypted DNS. Preserve that policy rather than downgrading it to UDP.
     dns.setdefault("proxy-server-nameserver", ["223.5.5.5", "119.29.29.29"])
     if tailscale.enabled:
+        # mihomo sends tsnet's interactive authorization URL to its info log.
+        # The official template's error level would hide first-time login.
+        if not tailscale.auth_key and result.get("log-level") in (
+            "warning",
+            "error",
+            "silent",
+        ):
+            result["log-level"] = "info"
         ts = {
             "name": "Tailscale",
             "type": "tailscale",

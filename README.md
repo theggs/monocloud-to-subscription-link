@@ -170,6 +170,10 @@ DNS uses the outbound's own resolver. Short MagicDNS names without the Tailnet
 suffix are not configured. Subnet routes require both a client configuration
 entry and the corresponding Tailnet advertisement/authorization.
 
+Without an auth key, enabled output raises `warning`/`error`/`silent` logging to
+`info` so mihomo's interactive login URL is visible. Keep client logs private;
+this does not enable subscription-server access logging.
+
 Authorize the client using the core's login URL if the client exposes it, or
 supply a private auth key. Keep the same non-ephemeral device's client-side state
 directory across restarts and subscription refreshes; preserve it in the client
