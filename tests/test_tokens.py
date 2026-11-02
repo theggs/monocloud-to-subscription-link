@@ -22,8 +22,8 @@ class TokenTests(unittest.TestCase):
         if os.name == "posix":
             self.assertEqual(stat.S_IMODE(self.path.stat().st_mode), 0o600)
 
-    def test_missing_token_prompts_for_import_or_login(self):
-        with self.assertRaisesRegex(ValueError, "import-token or login"):
+    def test_missing_token_directs_user_to_web_login(self):
+        with self.assertRaisesRegex(ValueError, "web interface"):
             self.store.load()
 
     def test_invalid_storage_does_not_expose_contents(self):

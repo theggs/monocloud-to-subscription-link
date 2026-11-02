@@ -20,12 +20,13 @@ Keep token storage in a local JSON file; an external secrets service is unnecess
   configurable User-Agent and optional X-Client-Version.
 - Preserve hostname, port, encryption, password, alias, and plan association in
   the shared node model. Skip explicitly disabled nodes; validate required fields.
-- Add CLI `import-token`, `login`, `plans`, and `nodes [--plan-id ID]` commands.
-  Discover all Shadowsocks services by default. Prompt for
-  secrets without echo; never accept passwords or tokens on command-line flags.
+- Account interaction is browser-only. Keep only service startup and read-only
+  configuration checking in the command-line entry point. Do not expose login,
+  token import, plan listing, or node retrieval as CLI commands. Shared API methods
+  still support service discovery and optional explicit service IDs internally.
 - Use config-relative token paths, defaulting to data_dir/token.json. Save with
   owner-only permissions through a temporary file and atomic replace. Do not save
-  login passwords or raw API responses. CLI reports counts, never node credentials.
+  login passwords or raw API responses. Browser responses never include credentials.
 - Treat invalid authentication as a request to log in again; do not retry login
   or assume that a refresh-token flow exists. Sanitize network/API errors.
 

@@ -54,7 +54,9 @@ class MonoCloudClient:
             headers["X-Client-Version"] = self.settings.client_version
         if token is not None:
             if not valid_token(token):
-                raise AuthenticationError("Invalid token. Run import-token or login.")
+                raise AuthenticationError(
+                    "Invalid token. Sign in through the web interface."
+                )
             headers["Authorization"] = f"Bearer {token}"
         try:
             response = self.http.request(
@@ -71,7 +73,7 @@ class MonoCloudClient:
             path == "/oauth/token" and response.status_code == 400
         ):
             raise AuthenticationError(
-                "Authentication rejected. Run login or import-token with a valid token."
+                "Authentication rejected. Sign in again through the web interface."
             )
         if not response.is_success:
             raise MonoCloudError(

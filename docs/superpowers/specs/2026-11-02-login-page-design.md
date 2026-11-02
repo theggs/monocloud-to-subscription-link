@@ -11,6 +11,8 @@ Serve bundled HTML/CSS/JavaScript from a small FastAPI application, started by
 `monocloud-subscription --config PATH serve`. This keeps the Python + uv project
 and deployment-independent entry point. A separate SPA/build pipeline would add
 unnecessary setup for one form; a CLI-only flow does not meet the requested UI.
+Per the user's final direction, browser login is the sole account interaction;
+the CLI retains only `serve` and `check`.
 
 ## Behavior
 

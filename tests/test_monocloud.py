@@ -81,14 +81,16 @@ class MonoCloudTests(unittest.TestCase):
         for status in (401, 403):
             with self.subTest(status=status):
                 api = self.client(httpx.Response(status, text="remote-private-value"))
-                with self.assertRaisesRegex(AuthenticationError, "login") as caught:
+                with self.assertRaisesRegex(
+                    AuthenticationError, "web interface"
+                ) as caught:
                     api.fetch_nodes("test-token", "123")
                 self.assertEqual(len(self.requests), 1)
                 self.assertNotIn("remote-private-value", str(caught.exception))
 
     def test_failed_login_is_actionable(self):
         api = self.client(httpx.Response(400, json={"message": "private-response"}))
-        with self.assertRaisesRegex(AuthenticationError, "login"):
+        with self.assertRaisesRegex(AuthenticationError, "web interface"):
             api.login("user@example.invalid", "test-password")
         self.assertEqual(len(self.requests), 1)
 

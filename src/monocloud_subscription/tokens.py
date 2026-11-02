@@ -26,13 +26,17 @@ class TokenStore:
         try:
             values = json.loads(self.path.read_text(encoding="utf-8"))
         except FileNotFoundError:
-            raise ValueError("No saved token. Run import-token or login.") from None
+            raise ValueError(
+                "No saved token. Sign in through the web interface."
+            ) from None
         except (ValueError, UnicodeDecodeError):
-            raise ValueError("Invalid token file. Run import-token or login.") from None
+            raise ValueError(
+                "Invalid token file. Sign in through the web interface."
+            ) from None
         except OSError:
             raise ValueError("Cannot read token file.") from None
         if not isinstance(values, dict) or not valid_token(values.get("access_token")):
-            raise ValueError("Invalid token file. Run import-token or login.")
+            raise ValueError("Invalid token file. Sign in through the web interface.")
         return values["access_token"]
 
     def save(self, token: str) -> None:
