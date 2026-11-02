@@ -119,3 +119,41 @@ routes = ["192.168.50.0/24", "fd00:1234::/64"]
                 with self.assertRaises(ValueError) as caught:
                     load_config(self.path)
                 self.assertNotIn("private-value", str(caught.exception))
+
+    def test_server_subscription_and_template_paths(self):
+        self.path.write_text(
+            """data_dir = "data"
+template_dir = "official-snapshot"
+[server]
+host = "0.0.0.0"
+port = 8090
+public_url = "https://example.invalid/mono"
+[subscription]
+key = "constructed-url-key-01234567890123456789"
+""",
+            encoding="utf-8",
+        )
+        config = load_config(self.path)
+        self.assertEqual(config.server.host, "0.0.0.0")
+        self.assertEqual(config.server.port, 8090)
+        self.assertEqual(config.server.public_url, "https://example.invalid/mono")
+        self.assertEqual(config.template_dir, self.directory / "official-snapshot")
+        self.assertNotIn("constructed-url-key", repr(config))
+        self.assertFalse(config.data_dir.exists())
+
+    def test_invalid_web_service_options_do_not_echo_private_data(self):
+        for text in (
+            "template_dir = 1",
+            "server = false",
+            "[server]\nport = true",
+            "[server]\nport = 65536",
+            '[server]\nhost = ""',
+            '[server]\npublic_url = "https://private-value@example.invalid"',
+            '[server]\npublic_url = "http://example.invalid/?private-value"',
+            "subscription = false",
+            '[subscription]\nkey = "private-value"',
+        ):
+            self.path.write_text('data_dir = "data"\n' + text)
+            with self.subTest(text=text), self.assertRaises(ValueError) as caught:
+                load_config(self.path)
+            self.assertNotIn("private-value", str(caught.exception))

@@ -15,10 +15,10 @@ Tailscale. Tailscale-specific routes and DNS settings are included only when ena
 service discovery, and node retrieval are implemented. The complete account workflow
 is tested against a local HTTP server using constructed credentials. Browser login
 and reuse of its saved token for service/node discovery have also been verified
-against MonoCloud. A browser login page is available. Subscription
-generation for Clash/mihomo is available as a Python API, with optional Tailscale.
-Subscription downloads are not implemented yet. Clash Mi device verification
-remains pending; see [generator verification](docs/clash-verification.md).
+against MonoCloud. The browser page provides a protected Clash/mihomo subscription
+link and a persistent Tailscale toggle. Both generator modes pass core checks;
+Clash Mi URL import/update and device behavior remain pending. See
+[verification](docs/clash-verification.md).
 
 ## Requirements and installation
 
@@ -64,8 +64,8 @@ whether a token is already saved. It does not display tokens or OAuth client
 secrets. Failed login preserves the previous token. The password is cleared from
 the form after each attempt and is not stored by the application.
 
-The server defaults to loopback. Use `--host` and `--port` to select a listen
-address. Binding beyond loopback requires a `MONOCLOUD_WEB_PASSWORD` environment
+The server defaults to loopback. Set `[server]` host/port in private TOML;
+`--host` and `--port` override them. Binding beyond loopback requires a `MONOCLOUD_WEB_PASSWORD` environment
 variable; browsers then prompt for username `admin` and that management password.
 This password controls access to the login page and is distinct from your MonoCloud
 account password. Supply it through your deployment's private environment, not
@@ -79,10 +79,32 @@ When using an HTTPS reverse proxy, forward the original `Host` and set
 if the proxy runs elsewhere, set `FORWARDED_ALLOW_IPS` to its specific trusted
 address. Do not trust arbitrary client-supplied forwarded headers. The Origin
 check still requires matching scheme, hostname and effective port. Request access
-logs are disabled. This page implements only account login for issue #2.
+logs are disabled. Management pages and APIs require this protection; native subscription downloads
+use only their secret URL credential, without HTTP Basic auth.
 
 Account interaction is available through the browser page. The command-line
 entry point is limited to starting the service and checking configuration.
+
+After login, use the **客户端订阅** card to copy the Clash/mihomo URL. In Clash Mi,
+add it under **我的配置 → + → 添加配置链接**, select that profile and connect in rule
+mode. The URL remains stable across restarts. Toggle **启用 Tailscale**, save, then
+update the same profile in Clash Mi and reconnect; disabling it requires no
+Tailscale settings or authorization.
+
+For a controlled home LAN, set `server.host` to your LAN listen address and
+`server.public_url` to the URL reachable by the phone, for example
+`http://192.168.1.10:8080` (replace this example with your own address). Supply the
+management password in the process environment and run the same `serve` command.
+The phone must be able to reach that host/port. Without `public_url`, links use the
+browser origin; a loopback URL cannot be imported from a phone. A reverse proxy
+may supply an HTTPS base URL with a mount prefix. Keep its own access/error logs
+from recording secret subscription paths, and do not cache responses.
+
+LAN HTTP exposes subscription URLs and returned credentials to observers on that
+network. Use it only within the controlled home-network transport assumption;
+use HTTPS for untrusted networks. This service is a configuration distributor:
+phone traffic goes to the configured proxy nodes/Tailnet directly. Updates require
+the server to be reachable; outside-home connectivity remains a deployment choice.
 
 **API verification limits:** static client inspection confirms the password-grant
 form and embedded OAuth client-credential source. Read-only GET requests using an
@@ -101,6 +123,10 @@ Configuration uses TOML. Supply its path explicitly with `--config`.
 | Setting | Required | Meaning |
 | --- | --- | --- |
 | `data_dir` | Yes | Nonempty path reserved for runtime data. Relative paths resolve against the configuration file's directory. |
+| `template_dir` | No | Explicit local official snapshot directory with `update.json` and `Clash_ss`. Both size and SHA-256 are verified; default is HTTPS download. Relative to TOML. |
+| `server.host`, `server.port` | No | Listen address and port; default `127.0.0.1:8080`. CLI flags override them. |
+| `server.public_url` | No | Base URL reachable by clients; defaults to the management browser origin. No credentials, query or fragment. |
+| `subscription.key` | No | Private random URL-safe key override (32-128 characters); normally generated automatically. |
 | `token_file` | No | Token JSON path; defaults to `data_dir/token.json`. An explicit relative path resolves against the configuration file. |
 | `monocloud.base_url` | No | HTTPS API root; defaults to the researched MonoCloud API. |
 | `monocloud.user_agent` | No | User-Agent header, default `MonocloudGO-1.0.1` from the verified client. |
@@ -120,7 +146,13 @@ also supported. Use an absolute configuration path when invoking the installed
 command from another directory.
 
 Keep private research, personal configuration, future credentials, and runtime
-data in `.local/`, which Git ignores. An external private directory is equally
+data in `.local/`, which Git ignores. The first server startup creates
+`data_dir/subscription.json` with a random 256-bit URL credential. Preserve this
+file to preserve client URLs; it also stores the saved Tailscale enabled override.
+If there is no override, the TOML flag is used. Changing TOML alone does not replace
+a browser-saved toggle; use the page to change it. Corrupt state fails explicitly
+rather than silently resetting it. State updates use owner-only temporary files
+and atomic replacement. Run one application worker for this local file store. An external private directory is equally
 valid. On POSIX systems new token files have owner-only permissions; token updates
 replace the file atomically. Existing directory permissions are left unchanged;
 deployers should restrict private configuration and data directories. Atomic
@@ -193,5 +225,8 @@ and provides one manual `Proxy` group containing every node. Name collisions are
 renamed deterministically; automatic switching is not enabled. Failure raises a
 sanitized `ValueError` without writing output. The asset host must be reachable
 from the deployment; HTTP 403/network failures are reported without silently
-substituting another policy. Scheduled refresh and last-good publication belong
-to #5. See [verification details](docs/clash-verification.md) for device limits.
+substituting another policy. If the asset host presents an automated-client challenge, `template_dir` can
+explicitly select an operator-provided official snapshot. This is not a fallback:
+it performs no download, trusts the operator's snapshot provenance, and keeps using
+it until the operator replaces it. Do not mistake an old snapshot for a fresh
+upstream check. Scheduled refresh and last-good publication belong to #5. See [verification details](docs/clash-verification.md) for device limits.

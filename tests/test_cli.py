@@ -154,3 +154,18 @@ class CliTests(unittest.TestCase):
         result = self.run_cli("check")
         self.assertEqual(result.returncode, 2)
         self.assertIn("--config is required", result.stderr)
+
+    def test_serve_uses_toml_address_and_cli_overrides(self):
+        self.path.write_text(
+            'data_dir = "data"\n[server]\nhost = "localhost"\nport = 8090'
+        )
+        for arguments, host, port in (
+            ([], "localhost", 8090),
+            (["--host", "127.0.0.1", "--port", "8091"], "127.0.0.1", 8091),
+        ):
+            with patch("uvicorn.run") as run, redirect_stderr(io.StringIO()):
+                self.assertEqual(
+                    main(["--config", str(self.path), "serve", *arguments]), 0
+                )
+            self.assertEqual(run.call_args.kwargs["host"], host)
+            self.assertEqual(run.call_args.kwargs["port"], port)

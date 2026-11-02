@@ -57,3 +57,24 @@ Tailscale initializes lazily on first use; allow time for initial authorization.
 Full `*.ts.net` names are configured; bare short names are not. Ensure the app
 permits state writes and retains that directory when updating/importing profiles.
 No claim is made yet about sleep recovery or network transitions.
+
+## #4 service integration (implementation checks)
+
+The actual service now provides credential-protected URLs. Both modes were
+retrieved over its real HTTP endpoint using saved account discovery and an
+explicit verified official snapshot, then passed mihomo v1.19.32 checks. Requests
+without management Basic auth can download using the secret subscription path;
+wrong-key requests return 404. Original toggle state was restored after testing.
+No account/node credentials are included in this record.
+
+Constructed-data browser tests verified copy, download, toggle save/reload and a
+390px layout with no horizontal overflow. The management password and subscription
+key live only in ignored private files. Device tests above remain pending; the
+user's stated Clash Mi version is 1.0.31.1703. Those tests now belong to #4.
+
+A current LAN transport limitation is not yet resolved: loopback HTTP returns the
+expected management 401 and authenticated downloads succeed, but connections to
+the host's LAN address are closed/reset (also reproduced from a LAN peer). The
+same LAN Host header over loopback succeeds, so this is not an application Host
+authorization failure. No system firewall, network filter or remote configuration
+was changed. Phone import cannot be claimed until LAN reachability is established.

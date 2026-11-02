@@ -1,7 +1,8 @@
-"""A login-only web interface for the existing MonoCloud account client."""
+"""Private account management and credential-protected subscription downloads."""
 
 import base64
 import secrets
+from dataclasses import replace
 from importlib.resources import files
 from urllib.parse import urlsplit
 
@@ -9,7 +10,7 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, Response
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictBool
 
 from monocloud_subscription.config import Config
 from monocloud_subscription.monocloud import (
@@ -18,12 +19,19 @@ from monocloud_subscription.monocloud import (
     MonoCloudError,
     OAuthConfigurationError,
 )
+from monocloud_subscription.subscription import generate_subscription
+from monocloud_subscription.subscription_state import SubscriptionStore
 from monocloud_subscription.tokens import TokenStore
 
 
 class LoginRequest(BaseModel):
     email: str = Field(min_length=1, max_length=320)
     password: SecretStr = Field(min_length=1, max_length=4096)
+
+
+class SubscriptionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tailscale_enabled: StrictBool
 
 
 def normalized_origin(value: str) -> tuple[str, str, int] | None:
@@ -56,6 +64,8 @@ def create_app(
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     resources = files("monocloud_subscription").joinpath("static")
     store = TokenStore(config.token_file)
+    subscriptions = SubscriptionStore(config.data_dir / "subscription.json")
+    subscriptions.load()  # Initialize once before concurrent requests can arrive.
 
     def secure(response: Response) -> Response:
         response.headers["Cache-Control"] = "no-store"
@@ -81,29 +91,38 @@ def create_app(
         )
         if expected is None:
             return error("invalid_host", 400)
-        if admin_password:
-            try:
-                scheme, encoded = request.headers.get("authorization", "").split(" ", 1)
-                if scheme.lower() != "basic":
-                    raise ValueError
-                username, password = (
-                    base64.b64decode(encoded, validate=True).decode().split(":", 1)
-                )
-                allowed = secrets.compare_digest(
-                    username.encode(), b"admin"
-                ) and secrets.compare_digest(password.encode(), admin_password.encode())
-            except (ValueError, UnicodeDecodeError):
-                allowed = False
-            if not allowed:
-                return error(
-                    "management_auth_required",
-                    401,
-                    headers={
-                        "WWW-Authenticate": 'Basic realm="MonoCloud", charset="UTF-8"',
-                    },
-                )
-        elif expected[1] not in ("localhost", "127.0.0.1", "::1"):
-            return error("local_access_only", 403)
+        is_download = (
+            request.url.path == "/subscriptions"
+            or request.url.path.startswith("/subscriptions/")
+        )
+        if not is_download:
+            if admin_password:
+                try:
+                    scheme, encoded = request.headers.get("authorization", "").split(
+                        " ", 1
+                    )
+                    if scheme.lower() != "basic":
+                        raise ValueError
+                    username, password = (
+                        base64.b64decode(encoded, validate=True).decode().split(":", 1)
+                    )
+                    allowed = secrets.compare_digest(
+                        username.encode(), b"admin"
+                    ) and secrets.compare_digest(
+                        password.encode(), admin_password.encode()
+                    )
+                except (ValueError, UnicodeDecodeError):
+                    allowed = False
+                if not allowed:
+                    return error(
+                        "management_auth_required",
+                        401,
+                        headers={
+                            "WWW-Authenticate": 'Basic realm="MonoCloud", charset="UTF-8"',
+                        },
+                    )
+            elif expected[1] not in ("localhost", "127.0.0.1", "::1"):
+                return error("local_access_only", 403)
 
         if request.method == "POST":
             origin = request.headers.get("origin")
@@ -120,7 +139,12 @@ def create_app(
     @app.exception_handler(RequestValidationError)
     async def invalid_input(request, exception):
         # Framework defaults include input values, which can contain passwords.
-        return error("invalid_login_input", 422)
+        return error(
+            "invalid_login_input"
+            if request.url.path == "/api/login"
+            else "invalid_input",
+            422,
+        )
 
     @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
     def index():
@@ -175,5 +199,63 @@ def create_app(
         except ValueError:
             return error("token_save_failed", 500)
         return {"token_saved": True}
+
+    def subscription_details(request: Request):
+        state = subscriptions.load()
+        key = config.subscription_key or state.key
+        base = config.server.public_url or str(request.base_url).rstrip("/")
+        return {
+            "url": f"{base}/subscriptions/{key}/clash.yaml",
+            "tailscale_enabled": (
+                state.tailscale_enabled
+                if state.tailscale_enabled is not None
+                else config.tailscale.enabled
+            ),
+        }
+
+    @app.get("/api/subscription")
+    def subscription_status(request: Request):
+        try:
+            return subscription_details(request)
+        except ValueError:
+            return error("subscription_state_unavailable", 500)
+
+    @app.post("/api/subscription")
+    def subscription_settings(settings: SubscriptionRequest, request: Request):
+        try:
+            subscriptions.set_enabled(settings.tailscale_enabled)
+            return subscription_details(request)
+        except ValueError:
+            return error("subscription_state_save_failed", 500)
+
+    @app.api_route("/subscriptions/{key}/clash.yaml", methods=["GET", "HEAD"])
+    def download(key: str):
+        try:
+            state = subscriptions.load()
+        except ValueError:
+            return error("subscription_state_unavailable", 500)
+        expected_key = config.subscription_key or state.key
+        if not secrets.compare_digest(key.encode(), expected_key.encode()):
+            return error("not_found", 404)
+        enabled = (
+            state.tailscale_enabled
+            if state.tailscale_enabled is not None
+            else config.tailscale.enabled
+        )
+        effective = replace(
+            config, tailscale=replace(config.tailscale, enabled=enabled)
+        )
+        try:
+            with httpx.Client(transport=transport) as http:
+                content = generate_subscription(effective, http)
+        except AuthenticationError:
+            return error("login_required", 401)
+        except ValueError:
+            return error("generation_failed", 502)
+        return Response(
+            content,
+            media_type="application/yaml",
+            headers={"Content-Disposition": 'attachment; filename="clash.yaml"'},
+        )
 
     return app

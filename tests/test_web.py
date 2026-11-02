@@ -296,3 +296,216 @@ class LoginPageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.json()["code"], "token_save_failed")
         self.assertNotIn("fake-private-storage", response.text)
         self.assertEqual(TokenStore(self.config.token_file).load(), "fake-old-token")
+
+
+class SubscriptionWebTests(unittest.IsolatedAsyncioTestCase):
+    setUp = LoginPageTests.setUp
+    client = LoginPageTests.client
+
+    async def details(self, client):
+        response = await client.get("/api/subscription")
+        self.assertEqual(response.status_code, 200)
+        return response.json()
+
+    async def test_native_download_uses_url_key_without_basic_auth(self):
+        client = self.client(
+            admin_password="constructed-admin", base_url="http://example.invalid"
+        )
+        client.auth = ("admin", "constructed-admin")
+        details = await self.details(client)
+        self.assertFalse(details["tailscale_enabled"])
+        path = httpx.URL(details["url"]).raw_path.decode()
+        client.auth = None
+        with patch(
+            "monocloud_subscription.web.generate_subscription",
+            return_value="mode: rule\nrules: [MATCH,DIRECT]\n",
+        ) as generate:
+            response = await client.get(path)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("mode: rule", response.text)
+            self.assertEqual(response.headers["cache-control"], "no-store")
+            self.assertIn("yaml", response.headers["content-type"])
+            head = await client.head(path)
+            self.assertEqual(head.status_code, 200)
+            self.assertEqual(head.content, b"")
+            self.assertEqual(generate.call_count, 2)
+            for wrong in (
+                "/subscriptions/wrong/clash.yaml",
+                path.replace("clash.yaml", "surge.conf"),
+                "/subscriptions",
+            ):
+                self.assertEqual((await client.get(wrong)).status_code, 404)
+            self.assertEqual(generate.call_count, 2)
+        self.assertEqual((await client.get("/api/subscription")).status_code, 401)
+        self.assertEqual((await client.get("/")).status_code, 401)
+
+    async def test_url_and_toggle_persist_and_preserve_private_tailscale_settings(self):
+        from monocloud_subscription.clash import TailscaleSettings
+
+        self.config = replace(
+            self.config, tailscale=TailscaleSettings(auth_key="constructed-ts-key")
+        )
+        client = self.client()
+        before = await self.details(client)
+        response = await client.post(
+            "/api/subscription",
+            json={"tailscale_enabled": True},
+            headers={"Origin": "http://localhost"},
+        )
+        self.assertEqual(response.status_code, 200)
+        after = await self.details(self.client())
+        self.assertTrue(after["tailscale_enabled"])
+        self.assertEqual(before["url"], after["url"])
+        self.assertNotIn("constructed-ts-key", str(after))
+        with patch(
+            "monocloud_subscription.web.generate_subscription",
+            return_value="mode: rule",
+        ) as generate:
+            await client.get(httpx.URL(after["url"]).raw_path.decode())
+            effective = generate.call_args.args[0]
+            self.assertTrue(effective.tailscale.enabled)
+            self.assertEqual(effective.tailscale.auth_key, "constructed-ts-key")
+        await client.post("/api/subscription", json={"tailscale_enabled": False})
+        self.assertFalse((await self.details(client))["tailscale_enabled"])
+
+    async def test_settings_require_same_origin_json_and_strict_boolean(self):
+        client = self.client()
+        for kwargs, status in (
+            (
+                {
+                    "json": {"tailscale_enabled": True},
+                    "headers": {"Origin": "https://evil.invalid"},
+                },
+                403,
+            ),
+            (
+                {
+                    "content": "private-secret",
+                    "headers": {"Content-Type": "text/plain"},
+                },
+                415,
+            ),
+            ({"json": {"tailscale_enabled": "private-secret"}}, 422),
+            ({"json": {"tailscale_enabled": True, "auth_key": "private-secret"}}, 422),
+        ):
+            response = await client.post("/api/subscription", **kwargs)
+            self.assertEqual(response.status_code, status)
+            self.assertNotIn("private-secret", response.text)
+        self.assertFalse((await self.details(client))["tailscale_enabled"])
+
+    async def test_public_base_url_and_private_key_override(self):
+        from monocloud_subscription.config import ServerSettings
+
+        self.config = replace(
+            self.config,
+            server=ServerSettings(
+                public_url="https://subscriptions.example.invalid/mono"
+            ),
+            subscription_key="constructed-key-01234567890123456789",
+        )
+        details = await self.details(self.client())
+        self.assertEqual(
+            details["url"],
+            "https://subscriptions.example.invalid/mono/subscriptions/constructed-key-01234567890123456789/clash.yaml",
+        )
+
+    async def test_generation_failures_do_not_echo_secrets(self):
+        from monocloud_subscription.monocloud import AuthenticationError
+
+        client = self.client()
+        path = httpx.URL((await self.details(client))["url"]).raw_path.decode()
+        for exception, status, code in (
+            (AuthenticationError("private-secret"), 401, "login_required"),
+            (ValueError("private-secret"), 502, "generation_failed"),
+        ):
+            with patch(
+                "monocloud_subscription.web.generate_subscription",
+                side_effect=exception,
+            ):
+                response = await client.get(path)
+            self.assertEqual(response.status_code, status)
+            self.assertEqual(response.json()["code"], code)
+            self.assertNotIn("private-secret", response.text)
+            self.assertEqual(response.headers["cache-control"], "no-store")
+
+    async def test_state_write_failure_preserves_toggle_and_link(self):
+        client = self.client()
+        before = await self.details(client)
+        with patch(
+            "monocloud_subscription.subscription_state.os.replace",
+            side_effect=OSError("private-secret"),
+        ):
+            response = await client.post(
+                "/api/subscription", json={"tailscale_enabled": True}
+            )
+        self.assertEqual(response.status_code, 500)
+        self.assertNotIn("private-secret", response.text)
+        self.assertEqual(await self.details(client), before)
+
+    async def test_download_composes_real_generator_snapshot_and_all_nodes(self):
+        import hashlib
+        import json
+
+        import yaml
+        from test_clash import TEMPLATE
+
+        root = self.config.data_dir.parent / "snapshot"
+        root.mkdir()
+        (root / "Clash_ss").write_bytes(TEMPLATE)
+        (root / "update.json").write_text(
+            json.dumps(
+                {
+                    "templates": [
+                        {
+                            "name": "Clash_ss",
+                            "size": len(TEMPLATE),
+                            "sha256": hashlib.sha256(TEMPLATE).hexdigest(),
+                        }
+                    ]
+                }
+            )
+        )
+        self.config = replace(self.config, template_dir=root)
+        TokenStore(self.config.token_file).save("constructed-token")
+
+        def upstream(request):
+            self.assertEqual(
+                request.headers["Authorization"], "Bearer constructed-token"
+            )
+            if request.url.path == "/api/service":
+                return httpx.Response(
+                    200,
+                    json=[
+                        {"id": 1, "plan": {"name": "Example", "type": "shadowsocks"}}
+                    ],
+                )
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "hostname": "node.example.invalid",
+                        "port": 443,
+                        "encryption": "aes-128-gcm",
+                        "password": "constructed-node-password",
+                        "alias": name,
+                    }
+                    for name in ("One", "Two")
+                ],
+            )
+
+        app = create_app(self.config, transport=httpx.MockTransport(upstream))
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://localhost"
+        ) as client:
+            details = await self.details(client)
+            response = await client.get(details["url"])
+            self.assertEqual(response.status_code, 200)
+            plain = yaml.safe_load(response.text)
+            self.assertEqual(len(plain["proxies"]), 2)
+            self.assertEqual(plain["proxies"][0]["server"], "node.example.invalid")
+            self.assertNotIn("tailscale", response.text.lower())
+            await client.post("/api/subscription", json={"tailscale_enabled": True})
+            enabled = yaml.safe_load((await client.get(details["url"])).text)
+            self.assertEqual(enabled["proxies"][-1]["type"], "tailscale")
+            self.assertEqual(enabled["rules"][-len(plain["rules"]) :], plain["rules"])
+            self.assertEqual((await self.details(client))["url"], details["url"])

@@ -102,3 +102,86 @@ form.addEventListener("submit", async (event) => {
 });
 
 loadStatus();
+
+
+const subscriptionUrl = document.querySelector("#subscription-url");
+const copySubscription = document.querySelector("#copy-subscription");
+const downloadSubscription = document.querySelector("#download-subscription");
+const subscriptionForm = document.querySelector("#subscription-form");
+const tailscaleEnabled = document.querySelector("#tailscale-enabled");
+const saveSubscription = document.querySelector("#save-subscription");
+const subscriptionFeedback = document.querySelector("#subscription-feedback");
+const subscriptionMode = document.querySelector("#subscription-mode");
+
+function subscriptionMessage(text, kind = "success") {
+  subscriptionFeedback.textContent = text;
+  subscriptionFeedback.dataset.kind = kind;
+  subscriptionFeedback.hidden = false;
+}
+
+function showSubscription(details) {
+  subscriptionUrl.value = details.url;
+  downloadSubscription.href = details.url;
+  downloadSubscription.setAttribute("aria-disabled", "false");
+  copySubscription.disabled = false;
+  tailscaleEnabled.checked = details.tailscale_enabled;
+  subscriptionMode.textContent = details.tailscale_enabled ? "MonoCloud + Tailscale" : "仅 MonoCloud";
+  tailscaleEnabled.disabled = false;
+  saveSubscription.disabled = false;
+  const host = new URL(details.url).hostname;
+  if (["localhost", "127.0.0.1", "[::1]"].includes(host)) {
+    document.querySelector("#link-note").textContent = "此链接目前使用本机地址。供手机使用时，请配置手机可访问的服务地址。";
+  }
+}
+
+async function loadSubscription() {
+  try {
+    const response = await fetch("/api/subscription", { cache: "no-store" });
+    if (!response.ok) throw new Error("subscription unavailable");
+    showSubscription(await response.json());
+  } catch {
+    subscriptionMessage("无法读取订阅设置，请检查服务后刷新页面。", "error");
+  }
+}
+
+copySubscription.addEventListener("click", async () => {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(subscriptionUrl.value);
+    } else {
+      subscriptionUrl.focus();
+      subscriptionUrl.select();
+      if (!document.execCommand("copy")) throw new Error("clipboard unavailable");
+    }
+    subscriptionMessage("链接已复制，可在 Clash Mi 中添加配置链接。");
+  } catch {
+    subscriptionUrl.focus();
+    subscriptionUrl.select();
+    subscriptionMessage("请手动复制上方链接。", "error");
+  }
+});
+
+subscriptionForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (subscriptionForm.getAttribute("aria-busy") === "true") return;
+  subscriptionForm.setAttribute("aria-busy", "true");
+  tailscaleEnabled.disabled = true;
+  saveSubscription.disabled = true;
+  try {
+    const response = await fetch("/api/subscription", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tailscale_enabled: tailscaleEnabled.checked }), cache: "no-store",
+    });
+    if (!response.ok) throw new Error("save failed");
+    showSubscription(await response.json());
+    subscriptionMessage("设置已保存。请在 Clash Mi 更新订阅后重新连接。");
+  } catch {
+    subscriptionMessage("设置未能保存，请稍后重试。", "error");
+  } finally {
+    subscriptionForm.setAttribute("aria-busy", "false");
+    tailscaleEnabled.disabled = false;
+    saveSubscription.disabled = false;
+  }
+});
+
+loadSubscription();
