@@ -103,3 +103,31 @@ Tailscale authorization UI handler. Its pubspec references a local
 libclash-vpn-service dependency, so public source inspection does not establish
 every behavior of the shipped binary. Whether the app automatically opens the
 authorization page is being tested on the device, not assumed.
+
+In the first enabled-mode device attempt, the user reported no automatic
+authorization prompt after triggering a Tailnet connection. The server confirmed
+that the downloaded output includes Tailscale and info logging. Clash Mi has its
+own core log-level override, whose default is error (also retained by its
+no-overwrite core patch); the next step is to select info in the client and inspect
+Core Logs. No successful Tailscale authorization or connectivity is claimed yet.
+
+### Tailscale startup failure isolated
+
+The user's supplied Core Logs show a successful route match to the Tailscale
+outbound followed by `tsnet: wgengine: magicsock: Rebind IPv4 failed: failed to bind
+any ports (tried [0])`. Initialization fails before authorization; missing auth
+UI/logs alone were not enough to diagnose it. The unrelated removed
+`global-client-fingerprint` warning comes from the client override; configuration
+initialization continued afterward.
+
+A local minimal reproduction used official mihomo v1.19.32 and a constructed SS
+node, no real account/key, and no TUN or system routing changes. With
+`dialer-proxy: Proxy`, it reproduced both the UDP rebind error and empty-target
+resolution failure, with no login hint. Removing that one field eliminated both
+errors and produced a login hint. Logs and unauthenticated test state remain in
+ignored private storage; temporary core processes were terminated.
+
+The generator now omits `dialer-proxy` for Tailscale. Public proxy traffic still
+uses MonoCloud; Tailscale's underlying network must be reachable directly. This
+matches https://github.com/MetaCubeX/mihomo/issues/3142. Device revalidation remains
+required; the reproduction does not establish phone connectivity or authorization.

@@ -200,7 +200,7 @@ class ClashTests(unittest.TestCase):
         result = self.render(tailscale=settings)
         ts = result["proxies"][-1]
         self.assertEqual(ts["type"], "tailscale")
-        self.assertEqual(ts["dialer-proxy"], "Proxy")
+        self.assertNotIn("dialer-proxy", ts)
         self.assertFalse(ts["ephemeral"])
         self.assertEqual(ts["state-dir"], "tailscale-state")
         self.assertEqual(ts["auth-key"], "constructed-key")

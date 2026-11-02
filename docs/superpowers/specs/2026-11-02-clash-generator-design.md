@@ -31,8 +31,12 @@ Local configuration selects the mixed port; LAN exposure defaults to disabled.
 
 ## Optional Tailscale
 
-Add a `Tailscale` outbound only when enabled. Its control/DERP dialer uses the
-manual `Proxy` group; SS node resolution uses independent bootstrap resolvers.
+Add a `Tailscale` outbound only when enabled. Its underlying dialer remains direct; SS node resolution uses independent
+bootstrap resolvers. The original proxy-backed dialer was removed after device
+logs and a two-variant mihomo v1.19.32 reproduction confirmed upstream #3142:
+proxy-backed UDP wildcard binding fails before login, while direct binding
+succeeds and emits an authorization hint. The client network must allow Tailscale
+control/DERP/STUN and peer connections directly.
 Route Tailnet IPv4/IPv6 and `ts.net` before the official LAN rules. Query Tailnet
 FQDNs through `ts://Tailscale` and exclude them from fake-IP. Optional explicit
 subnet CIDRs are routed to Tailscale with `accept-routes`; no exit node is used.

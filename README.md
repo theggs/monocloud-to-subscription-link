@@ -161,8 +161,11 @@ API responses are not persisted. Local configuration containing OAuth client sec
 should also be readable only by its owner. Do not put real credentials or generated
 subscriptions in tracked files or issue reports.
 
-When enabled, Tailscale uses the selected MonoCloud node for control/DERP
-connections. Existing IP-based bootstrap DNS is preserved; when absent, `223.5.5.5` and
+When enabled, Tailscale establishes its own underlying control/DERP/STUN and
+peer connections directly; the client network must permit them. No `dialer-proxy`
+is emitted: mihomo's proxy-backed UDP listener can fail before authorization
+([upstream #3142](https://github.com/MetaCubeX/mihomo/issues/3142)). Public proxy
+traffic still uses the manually selected MonoCloud node. Existing IP-based bootstrap DNS is preserved; when absent, `223.5.5.5` and
 `119.29.29.29` are supplied. Hostname-dependent bootstrap settings are rejected.
 Independent bootstrap DNS resolves proxy nodes. Tailnet IPv4/IPv6
 and `*.ts.net` FQDNs route to Tailscale before the official LAN rules; Tailnet
@@ -172,7 +175,12 @@ entry and the corresponding Tailnet advertisement/authorization.
 
 Without an auth key, enabled output raises `warning`/`error`/`silent` logging to
 `info` so mihomo's interactive login URL is visible. Keep client logs private;
-this does not enable subscription-server access logging.
+this does not enable subscription-server access logging. Clash Mi also applies
+its own core log-level override (default `error`): for first-time interactive
+authorization, set **核心设置 → 日志等级 → info**, reconnect, trigger a Tailnet
+request and open **核心日志**. If a login URL appears, open it privately in the
+browser. Automatic browser launching is not verified; after authorization, the
+client log level can be lowered again while retaining its state directory.
 
 Authorize the client using the core's login URL if the client exposes it, or
 supply a private auth key. Keep the same non-ephemeral device's client-side state

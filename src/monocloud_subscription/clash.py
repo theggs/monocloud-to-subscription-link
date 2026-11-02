@@ -96,8 +96,9 @@ def generate_clash(
             "ephemeral": False,
             "udp": True,
             "accept-routes": bool(tailscale.routes),
-            "dialer-proxy": "Proxy",
         }
+        # Leave the underlying dialer direct: mihomo #3142 reports that routing
+        # tsnet's wildcard UDP listener through a proxy fails before login.
         for key, value in (
             ("hostname", tailscale.hostname),
             ("auth-key", tailscale.auth_key),
