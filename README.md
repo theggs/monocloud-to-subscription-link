@@ -15,8 +15,10 @@ Tailscale. Tailscale-specific routes and DNS settings are included only when ena
 service discovery, and node retrieval are implemented. The complete account workflow
 is tested against a local HTTP server using constructed credentials. Browser login
 and reuse of its saved token for service/node discovery have also been verified
-against MonoCloud. A browser login page is available; subscription
-generation, Tailscale integration, and subscription downloads are not implemented yet.
+against MonoCloud. A browser login page is available. Subscription
+generation for Clash/mihomo is available as a Python API, with optional Tailscale.
+Subscription downloads are not implemented yet. Clash Mi device verification
+remains pending; see [generator verification](docs/clash-verification.md).
 
 ## Requirements and installation
 
@@ -32,7 +34,8 @@ uv run monocloud-subscription --help
 ```
 
 uv creates a project-specific `.venv/`. HTTP requests use httpx. FastAPI and Uvicorn
-serve the login page; Ruff is a development dependency.
+serve the login page; PyYAML parses and serializes Clash configuration. Ruff is a
+development dependency.
 
 ## Quick start
 
@@ -103,6 +106,13 @@ Configuration uses TOML. Supply its path explicitly with `--config`.
 | `monocloud.user_agent` | No | User-Agent header, default `MonocloudGO-1.0.1` from the verified client. |
 | `monocloud.client_version` | No | X-Client-Version header, default `1.0.1`; an empty string omits it. |
 | `monocloud.client_id`, `monocloud.client_secret` | For login | OAuth client credentials. Not required to reuse a saved token. |
+| `clash.mixed_port` | No | Client mixed proxy port, default `7890`; LAN access is disabled in generated configs. |
+| `tailscale.enabled` | No | Opt in to Tailscale, default `false`. |
+| `tailscale.hostname` | No | Client's Tailnet device name. |
+| `tailscale.state_dir` | No | Persistent path on the **client**, default `tailscale`. Never resolved against the server's configuration path. |
+| `tailscale.auth_key` | No | Private authorization key; omitted from output if unset. The core then logs a login URL. |
+| `tailscale.control_url` | No | Custom HTTPS control server URL, such as Headscale. |
+| `tailscale.routes` | No | Explicit subnet CIDRs advertised and authorized in the Tailnet; default empty. No exit node or default route is configured. |
 
 With `.local/config.toml` and `data_dir = "data"`, the runtime data location is
 `.local/data/`, regardless of the process working directory. Absolute paths are
@@ -118,6 +128,20 @@ replacement is not a power-loss durability guarantee. Browser login saves only t
 API responses are not persisted. Local configuration containing OAuth client secrets
 should also be readable only by its owner. Do not put real credentials or generated
 subscriptions in tracked files or issue reports.
+
+When enabled, Tailscale uses the selected MonoCloud node for control/DERP
+connections. Independent bootstrap DNS resolves proxy nodes. Tailnet IPv4/IPv6
+and `*.ts.net` FQDNs route to Tailscale before the official LAN rules; Tailnet
+DNS uses the outbound's own resolver. Short MagicDNS names without the Tailnet
+suffix are not configured. Subnet routes require both a client configuration
+entry and the corresponding Tailnet advertisement/authorization.
+
+Authorize the client using the core's login URL if the client exposes it, or
+supply a private auth key. Keep the same non-ephemeral device's client-side state
+directory across restarts and subscription refreshes; preserve it in the client
+sandbox or its deployment's persistent storage. Different devices should have
+separate state. A generated subscription contains node passwords and, when set,
+the Tailscale auth key: store and transfer it privately.
 
 Docker, direct execution, and systemd are deployment choices. They can use the
 same installed application entry point; no deployment method or fixed machine
@@ -143,3 +167,27 @@ are written to ignored `dist/`. Only application source
 and declared package metadata belong in distributions; local configuration and
 private research must remain excluded.
 
+The generator's Python API is intended for the subscription web layer in #4;
+no account or generation CLI workflow is added:
+
+```python
+from pathlib import Path
+import httpx
+from monocloud_subscription.config import load_config
+from monocloud_subscription.subscription import generate_subscription
+
+config = load_config(Path(".local/config.toml"))
+with httpx.Client() as http:
+    subscription_yaml = generate_subscription(config, http)
+# Contains credentials: pass privately to the serving layer; do not print/log it.
+```
+
+Generation loads the saved browser-login token, fetches all available Shadowsocks
+nodes, downloads the official `Clash_ss` template from its update manifest, and
+checks its size and SHA-256 before parsing. It preserves the official rule order
+and provides one manual `Proxy` group containing every node. Name collisions are
+renamed deterministically; automatic switching is not enabled. Failure raises a
+sanitized `ValueError` without writing output. The asset host must be reachable
+from the deployment; HTTP 403/network failures are reported without silently
+substituting another policy. Scheduled refresh and last-good publication belong
+to #5. See [verification details](docs/clash-verification.md) for device limits.

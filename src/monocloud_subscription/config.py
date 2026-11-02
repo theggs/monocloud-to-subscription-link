@@ -2,9 +2,11 @@
 
 import tomllib
 from dataclasses import dataclass, field
+from ipaddress import ip_network
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from monocloud_subscription.clash import ClashSettings, TailscaleSettings
 from monocloud_subscription.monocloud import MonoCloudSettings
 
 
@@ -13,6 +15,8 @@ class Config:
     data_dir: Path
     token_file: Path
     monocloud: MonoCloudSettings = field(default_factory=MonoCloudSettings)
+    clash: ClashSettings = field(default_factory=ClashSettings)
+    tailscale: TailscaleSettings = field(default_factory=TailscaleSettings)
 
 
 def load_config(path: Path) -> Config:
@@ -81,4 +85,60 @@ def load_config(path: Path) -> Config:
             raise ValueError(
                 "MonoCloud request headers must contain printable ASCII only."
             )
-    return Config(data_dir=data_dir, token_file=token_path, monocloud=api)
+    clash_values = values.get("clash", {})
+    if not isinstance(clash_values, dict):
+        raise ValueError("clash must be a TOML table.")
+    port = clash_values.get("mixed_port", 7890)
+    if type(port) is not int or not 1 <= port <= 65535:
+        raise ValueError("clash.mixed_port must be an integer between 1 and 65535.")
+    ts_values = values.get("tailscale", {})
+    if not isinstance(ts_values, dict):
+        raise ValueError("tailscale must be a TOML table.")
+    ts_options = {}
+    for key in ("enabled", "hostname", "state_dir", "auth_key", "control_url"):
+        if key not in ts_values:
+            continue
+        value = ts_values[key]
+        if (key == "enabled" and type(value) is not bool) or (
+            key != "enabled" and not isinstance(value, str)
+        ):
+            raise ValueError(f"Invalid tailscale.{key} type.")
+        ts_options[key] = value
+    if not ts_options.get("state_dir", "tailscale").strip():
+        raise ValueError("tailscale.state_dir must be a nonempty client-side path.")
+    if ts_options.get("control_url"):
+        try:
+            control = urlsplit(ts_options["control_url"])
+            if (
+                control.scheme != "https"
+                or not control.hostname
+                or control.username
+                or control.password
+            ):
+                raise ValueError
+            _ = control.port
+        except ValueError:
+            raise ValueError(
+                "tailscale.control_url must be an HTTPS URL without credentials."
+            ) from None
+    routes = ts_values.get("routes", [])
+    try:
+        if not isinstance(routes, list) or any(
+            not isinstance(route, str) for route in routes
+        ):
+            raise ValueError
+        networks = [ip_network(route, strict=True) for route in routes]
+        if any(network.prefixlen == 0 for network in networks):
+            raise ValueError
+    except ValueError:
+        raise ValueError(
+            "tailscale.routes must be explicit subnet CIDRs, not default routes."
+        ) from None
+    ts_options["routes"] = tuple(str(network) for network in networks)
+    return Config(
+        data_dir=data_dir,
+        token_file=token_path,
+        monocloud=api,
+        clash=ClashSettings(port),
+        tailscale=TailscaleSettings(**ts_options),
+    )
