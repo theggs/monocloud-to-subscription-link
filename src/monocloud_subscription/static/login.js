@@ -65,7 +65,7 @@ form.addEventListener("submit", async (event) => {
       body: JSON.stringify(payload),
       cache: "no-store",
     });
-    const result = await response.json();
+    const result = await response.json().catch(() => null);
     if (!response.ok) {
       const errors = {
         login_rejected: "登录未通过，请检查邮箱和密码后重试。",
@@ -74,7 +74,12 @@ form.addEventListener("submit", async (event) => {
         upstream_unavailable: "暂时无法连接 MonoCloud，请稍后重试。",
         token_save_failed: "登录验证已通过，但凭据保存失败，请检查服务的存储权限。",
       };
-      message(errors[result.code] || "登录暂未完成，请稍后重试。", "error");
+      const fallback = response.status >= 500
+        ? "当前服务处理登录时发生错误，请稍后重试。"
+        : "登录暂未完成，请稍后重试。";
+      message(errors[result?.code] || fallback, "error");
+    } else if (result?.token_saved !== true) {
+      message("当前服务返回了无效的登录结果，请稍后重试。", "error");
     } else {
       savedStatus(true);
       message("登录成功，连接凭据已保存。", "success");
