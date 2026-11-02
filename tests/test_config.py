@@ -39,3 +39,39 @@ class ConfigTests(unittest.TestCase):
     def test_missing_configuration_is_reported(self):
         with self.assertRaisesRegex(ValueError, "Cannot read configuration"):
             load_config(self.path)
+
+    def test_token_path_defaults_to_data_directory(self):
+        self.path.write_text('data_dir = "data"', encoding="utf-8")
+        config = load_config(self.path)
+        self.assertEqual(config.token_file, self.directory / "data" / "token.json")
+
+    def test_monocloud_settings_and_token_path_are_configurable(self):
+        self.path.write_text(
+            """data_dir = "data"
+token_file = "credentials/session.json"
+[monocloud]
+client_id = "example-client"
+client_secret = "example-secret"
+client_version = "example-version"
+user_agent = "example-agent"
+""",
+            encoding="utf-8",
+        )
+        config = load_config(self.path)
+        self.assertEqual(config.token_file, self.directory / "credentials/session.json")
+        self.assertEqual(config.monocloud.client_id, "example-client")
+        self.assertEqual(config.monocloud.user_agent, "example-agent")
+        self.assertNotIn("example-secret", repr(config))
+
+    def test_invalid_settings_do_not_echo_values(self):
+        for value in (
+            'monocloud = "private-value"',
+            "[monocloud]\nuser_agent = 42",
+            '[monocloud]\nbase_url = "http://insecure.invalid"',
+            '[monocloud]\nuser_agent = "bad\\nheader"',
+        ):
+            with self.subTest(value=value):
+                self.path.write_text('data_dir = "data"\n' + value, encoding="utf-8")
+                with self.assertRaises(ValueError) as caught:
+                    load_config(self.path)
+                self.assertNotIn("private-value", str(caught.exception))
