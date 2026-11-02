@@ -40,3 +40,4 @@
 - The actual login page is available locally; no real MonoCloud login was submitted by the agent.
 - The user completed real browser login. Subsequent project GET requests using the saved token verified service discovery, node retrieval, and required fields without printing or persisting raw node responses.
 - SOCKS proxy regression coverage brings the full suite to 50 passing tests. Real login acceptance is complete; PR #8 can leave draft status.
+- Current verification after review fixes: 53 tests pass. This supersedes the historical counts above. Host normalization now accepts bracketed IPv6/outer whitespace, rejects empty addresses, and uses one normalized value for binding and startup messages.

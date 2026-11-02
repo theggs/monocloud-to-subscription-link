@@ -80,6 +80,40 @@ class CliTests(unittest.TestCase):
         self.assertIn(str(self.directory / "data"), result.stdout)
         self.assertFalse((self.directory / "data").exists())
 
+    def test_serve_normalizes_loopback_addresses_before_binding(self):
+        self.path.write_text('data_dir = "data"', encoding="utf-8")
+        for value, normalized, url in (
+            (" [::1] ", "::1", "http://[::1]:8080"),
+            (" 127.0.0.1 ", "127.0.0.1", "http://127.0.0.1:8080"),
+        ):
+            with self.subTest(host=value):
+                output = io.StringIO()
+                with (
+                    patch.dict(os.environ, {"MONOCLOUD_WEB_PASSWORD": ""}),
+                    patch("uvicorn.run") as run,
+                    redirect_stderr(output),
+                ):
+                    self.assertEqual(
+                        main(["--config", str(self.path), "serve", "--host", value]), 0
+                    )
+                self.assertEqual(run.call_args.kwargs["host"], normalized)
+                self.assertIn(url, output.getvalue())
+                self.assertNotIn("WARNING", output.getvalue())
+
+    def test_serve_rejects_empty_host_before_binding(self):
+        self.path.write_text('data_dir = "data"', encoding="utf-8")
+        with (
+            patch.dict(
+                os.environ, {"MONOCLOUD_WEB_PASSWORD": "fake-management-password"}
+            ),
+            patch("uvicorn.run") as run,
+            redirect_stderr(io.StringIO()),
+        ):
+            with self.assertRaises(SystemExit) as caught:
+                main(["--config", str(self.path), "serve", "--host", "  "])
+        self.assertEqual(caught.exception.code, 2)
+        run.assert_not_called()
+
     def test_invalid_config_returns_a_concise_error(self):
         self.path.write_text("secret-value = [invalid", encoding="utf-8")
         result = self.run_cli("--config", str(self.path), "check")

@@ -38,26 +38,34 @@ def main(argv: list[str] | None = None) -> int:
 
             from monocloud_subscription.web import create_app
 
+            bind_host = args.host.strip()
+            if bind_host.startswith("[") and bind_host.endswith("]"):
+                bind_host = bind_host[1:-1].strip()
+            if not bind_host:
+                raise ValueError("Host must not be empty.")
+            loopback = bind_host in ("127.0.0.1", "localhost", "::1")
             management_password = os.environ.get("MONOCLOUD_WEB_PASSWORD")
-            if (
-                args.host not in ("127.0.0.1", "localhost", "::1")
-                and not management_password
-            ):
+            if not loopback and not management_password:
                 raise ValueError(
                     "Set MONOCLOUD_WEB_PASSWORD before binding beyond loopback."
                 )
             if not 1 <= args.port <= 65535:
                 raise ValueError("Port must be between 1 and 65535.")
-            host = f"[{args.host}]" if ":" in args.host else args.host
+            host = f"[{bind_host}]" if ":" in bind_host else bind_host
             print(f"Listen URL: http://{host}:{args.port}", file=sys.stderr)
-            if args.host not in ("127.0.0.1", "localhost", "::1"):
+            if not loopback:
                 print(
                     "WARNING: Remote HTTP does not encrypt account or management credentials. "
                     "Use an HTTPS reverse proxy before remote browser access.",
                     file=sys.stderr,
                 )
+            if bind_host in ("0.0.0.0", "::"):
+                print(
+                    "For browser access, use this machine's reachable address and the listen port.",
+                    file=sys.stderr,
+                )
             app = create_app(config, admin_password=management_password)
-            uvicorn.run(app, host=args.host, port=args.port, access_log=False)
+            uvicorn.run(app, host=bind_host, port=args.port, access_log=False)
             return 0
         if args.command == "check":
             print(f"Configuration OK. Data directory: {config.data_dir}")
