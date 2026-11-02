@@ -1,3 +1,17 @@
 # Relative paths are resolved against this configuration file's directory.
 # Copy this file to .local/config.toml to keep private settings out of Git.
 data_dir = "data"
+
+# Optional override; otherwise the token is stored at data_dir/token.json.
+# token_file = "credentials/token.json"
+
+[monocloud]
+base_url = "https://api.bluecloudworks.com"
+user_agent = "MonocloudGO-1.0.1"
+client_version = "1.0.1"
+# These request headers match the client used for read-only API verification.
+# Override them if the API's requirements change.
+# Client credentials are required only for password-grant login.
+# Configure actual values privately; never commit them.
+# client_id = ""
+# client_secret = ""

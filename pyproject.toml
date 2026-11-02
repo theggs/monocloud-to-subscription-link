@@ -4,7 +4,11 @@ version = "0.1.0"
 description = "Generate MonoCloud client subscriptions with Tailscale support."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "fastapi>=0.115,<1",
+    "httpx[socks]>=0.28,<1",
+    "uvicorn>=0.34,<1",
+]
 
 [project.scripts]
 monocloud-subscription = "monocloud_subscription.cli:main"

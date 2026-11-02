@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>MonoCloud · 账户连接</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/login.css">
+  <script src="/assets/login.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <a class="brand" href="/" aria-label="MonoCloud 账户连接首页">
+      <svg viewBox="0 0 36 36" aria-hidden="true"><path d="M6 25V11l12 10 12-10v14M6 18l12 10 12-10"/></svg>
+      <span>MonoCloud<span class="brand-separator">/</span><span class="brand-context">账户连接</span></span>
+    </a>
+    <span class="service-mark"><span></span>本地管理</span>
+  </header>
+
+  <main class="layout">
+    <section class="intro" aria-labelledby="page-title">
+      <p class="eyebrow">ACCOUNT ACCESS <span>01</span></p>
+      <h1 id="page-title">从这里，<br>连接 <em>MonoCloud.</em></h1>
+      <p class="description">使用你的 MonoCloud 账户登录。<br>连接所需的凭据将保存在当前服务中。</p>
+      <div class="connection" id="connection" data-state="checking">
+        <span class="connection-dot" aria-hidden="true"></span>
+        <div><p id="connection-title">正在检查连接</p><p id="connection-detail">读取当前服务的登录状态…</p></div>
+      </div>
+      <p class="privacy"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 9V6a5 5 0 0 1 10 0v3M4 9h12v9H4zM10 12v3"/></svg>密码仅用于本次验证，不会被保存。</p>
+    </section>
+
+    <section class="login-card" aria-labelledby="form-title">
+      <div class="card-heading"><span class="card-kicker">连接账户</span><span class="card-symbol" aria-hidden="true">↗</span></div>
+      <h2 id="form-title">登录 MonoCloud</h2>
+      <p class="card-description">输入你的账户邮箱与密码。</p>
+
+      <form id="login-form" aria-busy="false">
+        <label for="email">邮箱地址</label>
+        <input id="email" name="email" type="email" autocomplete="username" placeholder="you@example.com" required maxlength="320" spellcheck="false" autocapitalize="none">
+
+        <div class="password-label"><label for="password">密码</label><span>区分大小写</span></div>
+        <div class="password-field">
+          <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="4096">
+          <button id="password-toggle" class="visibility" type="button" aria-label="显示密码" aria-pressed="false">显示</button>
+        </div>
+
+        <div id="feedback" class="feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+        <button class="submit" id="submit" type="submit" disabled><span id="submit-label">登录 MonoCloud</span><span class="submit-arrow" aria-hidden="true">→</span><span class="spinner" aria-hidden="true"></span></button>
+        <p class="form-note">登录成功后，当前服务会记住连接凭据。</p>
+      </form>
+      <noscript><p class="feedback" data-kind="error">请启用 JavaScript 后使用此登录页面。</p></noscript>
+    </section>
+  </main>
+  <footer><span>MonoCloud 账户连接</span><span>简单连接，私密保存。</span></footer>
+</body>
+</html>

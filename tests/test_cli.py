@@ -1,9 +1,14 @@
+import io
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
+from unittest.mock import patch
+
+from monocloud_subscription.cli import main
 
 
 class CliTests(unittest.TestCase):
@@ -30,6 +35,43 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("check", result.stdout)
 
+    def test_external_web_binding_requires_management_password(self):
+        self.path.write_text('data_dir = "data"', encoding="utf-8")
+        with patch.dict(os.environ, {"MONOCLOUD_WEB_PASSWORD": ""}):
+            result = self.run_cli(
+                "--config", str(self.path), "serve", "--host", "0.0.0.0"
+            )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("MONOCLOUD_WEB_PASSWORD", result.stderr)
+
+    def test_web_serve_uses_configured_address_without_access_logs(self):
+        self.path.write_text('data_dir = "data"', encoding="utf-8")
+        with patch("uvicorn.run") as run:
+            self.assertEqual(
+                main(["--config", str(self.path), "serve", "--port", "8081"]), 0
+            )
+        self.assertEqual(
+            run.call_args.kwargs,
+            {"host": "127.0.0.1", "port": 8081, "access_log": False},
+        )
+
+    def test_remote_binding_warns_about_plaintext_credentials(self):
+        self.path.write_text('data_dir = "data"', encoding="utf-8")
+        output = io.StringIO()
+        with (
+            patch.dict(
+                os.environ, {"MONOCLOUD_WEB_PASSWORD": "fake-management-password"}
+            ),
+            patch("uvicorn.run"),
+            redirect_stderr(output),
+        ):
+            self.assertEqual(
+                main(["--config", str(self.path), "serve", "--host", "0.0.0.0"]), 0
+            )
+        self.assertIn("http://0.0.0.0:8080", output.getvalue())
+        self.assertIn("does not encrypt", output.getvalue())
+        self.assertNotIn("fake-management-password", output.getvalue())
+
     def test_check_from_another_directory_is_read_only(self):
         self.path.write_text('data_dir = "data"', encoding="utf-8")
         result = self.run_cli("--config", str(self.path), "check")
@@ -37,6 +79,68 @@ class CliTests(unittest.TestCase):
         self.assertIn("Configuration OK", result.stdout)
         self.assertIn(str(self.directory / "data"), result.stdout)
         self.assertFalse((self.directory / "data").exists())
+
+    def test_serve_normalizes_loopback_addresses_before_binding(self):
+        self.path.write_text('data_dir = "data"', encoding="utf-8")
+        for value, normalized, url in (
+            (" [::1] ", "::1", "http://[::1]:8080"),
+            (" 127.0.0.1 ", "127.0.0.1", "http://127.0.0.1:8080"),
+        ):
+            with self.subTest(host=value):
+                output = io.StringIO()
+                with (
+                    patch.dict(os.environ, {"MONOCLOUD_WEB_PASSWORD": ""}),
+                    patch("uvicorn.run") as run,
+                    redirect_stderr(output),
+                ):
+                    self.assertEqual(
+                        main(["--config", str(self.path), "serve", "--host", value]), 0
+                    )
+                self.assertEqual(run.call_args.kwargs["host"], normalized)
+                self.assertIn(url, output.getvalue())
+                self.assertNotIn("WARNING", output.getvalue())
+
+    def test_serve_rejects_empty_host_before_binding(self):
+        self.path.write_text('data_dir = "data"', encoding="utf-8")
+        with (
+            patch.dict(
+                os.environ, {"MONOCLOUD_WEB_PASSWORD": "fake-management-password"}
+            ),
+            patch("uvicorn.run") as run,
+            redirect_stderr(io.StringIO()),
+        ):
+            with self.assertRaises(SystemExit) as caught:
+                main(["--config", str(self.path), "serve", "--host", "  "])
+        self.assertEqual(caught.exception.code, 2)
+        run.assert_not_called()
+
+    def test_serve_rejects_urls_ports_paths_and_unbalanced_ipv6(self):
+        self.path.write_text('data_dir = "data"', encoding="utf-8")
+        for value in (
+            "example.com:8080",
+            "127.0.0.1:8080",
+            "[::1",
+            "::1]",
+            "https://example.invalid",
+            "example.invalid/path",
+        ):
+            with self.subTest(host=value):
+                output = io.StringIO()
+                with (
+                    patch.dict(
+                        os.environ,
+                        {"MONOCLOUD_WEB_PASSWORD": "fake-management-password"},
+                    ),
+                    patch("uvicorn.run") as run,
+                    redirect_stderr(output),
+                ):
+                    with self.assertRaises(SystemExit) as caught:
+                        main(["--config", str(self.path), "serve", "--host", value])
+                self.assertEqual(caught.exception.code, 2)
+                self.assertIn(
+                    "Host must be a hostname or IP address", output.getvalue()
+                )
+                run.assert_not_called()
 
     def test_invalid_config_returns_a_concise_error(self):
         self.path.write_text("secret-value = [invalid", encoding="utf-8")
