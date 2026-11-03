@@ -179,7 +179,7 @@ def create_app(
         }
         if verify:
             state = "signed_out"
-            count = 0
+            names = []
             if token is not None:
                 try:
                     with httpx.Client(transport=transport) as http:
@@ -187,12 +187,14 @@ def create_app(
                             token
                         )
                     state = "connected"
-                    count = len(plans)
+                    names = [plan.name for plan in plans]
                 except AuthenticationError:
                     state = "expired"
                 except MonoCloudError:
                     state = "unavailable"
-            result.update(account_state=state, plan_count=count)
+            result.update(
+                account_state=state, plan_count=len(names), plan_names=names
+            )
         return result
 
     @app.post("/api/login")
@@ -229,6 +231,8 @@ def create_app(
                 if state.tailscale_enabled is not None
                 else config.tailscale.enabled
             ),
+            # The page asks for an explicit first choice until one is saved.
+            "tailscale_choice_saved": state.tailscale_enabled is not None,
         }
 
     @app.get("/api/subscription")

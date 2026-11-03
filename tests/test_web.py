@@ -554,11 +554,23 @@ class VerifiedAccountTests(unittest.IsolatedAsyncioTestCase):
         result = await self.client().get("/api/status?verify=true")
         self.assertEqual(result.json()["account_state"], "signed_out")
         self.assertEqual(result.json()["plan_count"], 0)
+        self.assertEqual(result.json()["plan_names"], [])
         self.assertEqual(self.requests, [])
 
-    async def test_verified_saved_session_reports_service_count_without_account_data(
-        self,
-    ):
+    async def test_choice_saved_flag_tracks_first_save(self):
+        client = self.client()
+        self.assertFalse(
+            (await client.get("/api/subscription")).json()["tailscale_choice_saved"]
+        )
+        saved = await client.post(
+            "/api/subscription", json={"tailscale_enabled": False}
+        )
+        self.assertTrue(saved.json()["tailscale_choice_saved"])
+        self.assertTrue(
+            (await client.get("/api/subscription")).json()["tailscale_choice_saved"]
+        )
+
+    async def test_verified_saved_session_reports_plan_names_without_token(self):
         TokenStore(self.config.token_file).save("constructed-token")
         result = await self.client(
             payload=[
@@ -568,7 +580,7 @@ class VerifiedAccountTests(unittest.IsolatedAsyncioTestCase):
         ).get("/api/status?verify=true")
         self.assertEqual(result.json()["account_state"], "connected")
         self.assertEqual(result.json()["plan_count"], 2)
-        self.assertNotIn("private-plan-name", result.text)
+        self.assertEqual(result.json()["plan_names"], ["private-plan-name", "Other"])
         self.assertNotIn("constructed-token", result.text)
         self.assertEqual(self.requests[0].url.path, "/api/service")
 
