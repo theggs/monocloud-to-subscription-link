@@ -2,7 +2,7 @@
 
 This document is for the person running the service. Account operations, plan/node
 selection and client import/update instructions belong to the management page's
-**客户端接入指南**. The README Quick start covers only the first local startup.
+**导入客户端**. The README Quick start covers only the first local startup.
 
 ## Docker Compose
 
