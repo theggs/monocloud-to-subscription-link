@@ -1,32 +1,26 @@
-<section class="login-card guide-card" id="client-guides" aria-labelledby="guides-title">
-  <div class="card-heading"><span class="card-kicker">客户端接入指南</span><span class="card-symbol" aria-hidden="true">↗</span></div>
-  <h2 id="guides-title">在手机上开始使用</h2>
-  <p class="card-description">先完成基础接入；需要访问 Tailnet 时，再叠加 Tailscale。</p>
-  <details class="client-guide" id="guide-clash-mi">
-    <summary>Clash Mi 接入<span>已支持</span></summary>
-    <div class="guide-content">
-      <h3>基础接入</h3>
-      <ol>
-        <li><strong>确认网络。</strong>手机需能访问本服务。家庭局域网部署时，先连接同一 Wi-Fi；订阅地址不能是 127.0.0.1 或 localhost。</li>
-        <li><strong>连接账户。</strong>在本页登录 MonoCloud。已连接时表单默认收起，更换账户可打开“重新登录 / 切换账户”。管理入口的用户名是 admin，管理密码向部署者获取，与 MonoCloud 账户密码不同。</li>
-        <li><strong>添加订阅。</strong>复制本页链接，在 Clash Mi 的“我的配置 → + → 添加配置链接”中粘贴并保存，选中该配置。</li>
-        <li><strong>选择套餐和节点。</strong>使用规则模式；在 Proxy 组选择套餐，再在对应套餐组选择节点。GLOBAL 对应全局模式，日常分流使用规则模式。</li>
-        <li><strong>连接并验证。</strong>开启连接，按系统提示允许 VPN，确认常用国内外网站能访问。切换节点仍在对应套餐组操作。</li>
-        <li><strong>更新配置。</strong>在 Clash Mi 手动更新同一订阅，重新连接。链接保持不变；首次升级到套餐分组时，请重新选择一次套餐和节点。</li>
+<details class="client" id="guide-clash-mi">
+  <summary><span class="client-name"><b>Clash Mi</b><span class="pill mute">mihomo 格式</span></span><span class="client-quick">我的配置 → + → 添加配置链接</span></summary>
+  <div class="client-body">
+    <ol class="guide-steps">
+      <li><b>确认网络。</b>使用订阅的设备需能访问本服务。家庭局域网部署时，先连接同一局域网（如同一 Wi-Fi）；在其他设备上，订阅地址不能是 127.0.0.1 或 localhost。</li>
+      <li><b>连接账户。</b>在本页登录 MonoCloud。已连接时账户显示为一行，更换账户可点“切换账户”。管理入口的用户名是 admin，管理密码向部署者获取，与 MonoCloud 账户密码不同。</li>
+      <li><b>添加订阅。</b>复制本页链接，在 Clash Mi 的“我的配置 → + → 添加配置链接”中粘贴并保存，选中该配置。</li>
+      <li><b>选择套餐和节点。</b>使用规则模式；在 Proxy 组选择套餐，再在对应套餐组选择节点。<span data-plan-names></span>GLOBAL 对应全局模式，日常分流使用规则模式。</li>
+      <li><b>连接并验证。</b>开启连接，按系统提示允许 VPN，确认常用国内外网站能访问。切换节点仍在对应套餐组操作。</li>
+    </ol>
+    <ul class="guide-steps guide-notes">
+      <li><b>更新配置。</b>在 Clash Mi 手动更新同一订阅，重新连接。链接保持不变；首次升级到套餐分组时，请重新选择一次套餐和节点。</li>
+    </ul>
+    <details class="guide-extension" id="guide-clash-mi-tailscale">
+      <summary>可选：增加 Tailscale 能力</summary>
+      <ol class="guide-steps">
+        <li><b>开启并更新。</b>在本页“订阅内容”选择“代理 + Tailscale”并保存，然后在 Clash Mi 更新原订阅、重新连接，不需要另建配置或更换链接。</li>
+        <li><b>触发首次连接。</b>访问你自己的 Tailnet IP 或完整域名。Tailscale 按需启动，首次请求可能短暂超时。</li>
+        <li><b>获取授权链接。</b>在“核心设置 → 日志等级”选择 info，重新连接并触发访问。打开“核心日志 → 右上角 ⋮ → 复制”，粘贴到私人备忘录，搜索 login.tailscale.com，打开 go to: 后面的完整链接。不要把整份日志粘贴进浏览器搜索框。</li>
+        <li><b>完成授权。</b>保持 Clash Mi 的 VPN 连接，在浏览器登录 Tailscale 并确认设备加入自己的 Tailnet。等待连接就绪后，再访问 Tailnet IP 和完整域名，同时确认公网网站仍正常。</li>
+        <li><b>关闭可选能力。</b>在本页“订阅内容”改回“仅代理”，保存后更新原订阅并重连，基础代理继续使用。不要为此删除客户端状态。</li>
       </ol>
-      <details class="optional-guide">
-        <summary>可选：增加 Tailscale 能力<span>在原配置上叠加</span></summary>
-        <ol>
-          <li><strong>开启并更新。</strong>在本页开启 Tailscale 并保存，然后在 Clash Mi 更新原订阅、重新连接，不需要另建配置或更换链接。</li>
-          <li><strong>触发首次连接。</strong>访问你自己的 Tailnet IP 或完整域名。Tailscale 按需启动，首次请求可能短暂超时。</li>
-          <li><strong>获取授权链接。</strong>若未自动出现授权页，在“核心设置 → 日志等级”选择 info，重新连接并触发访问。打开“核心日志 → 右上角 ⋮ → 复制”，粘贴到私人备忘录，搜索 login.tailscale.com，打开 go to: 后面的完整链接。不要把整份日志粘贴进浏览器搜索框。</li>
-          <li><strong>完成授权。</strong>保持 Clash Mi 的 VPN 连接，在 Safari 登录 Tailscale 并确认设备加入自己的 Tailnet。等待连接就绪后，再访问 Tailnet IP 和完整域名，同时确认公网网站仍正常。</li>
-          <li><strong>保留设备身份。</strong>重启或更新订阅后应无需重新授权。保留同一配置及客户端状态目录，不要清除 Tailscale 状态。授权完成后可调低客户端日志等级。</li>
-          <li><strong>关闭可选能力。</strong>在本页关闭 Tailscale，保存后更新原订阅并重连，基础代理继续使用。不要为关闭此功能而删除客户端状态。</li>
-        </ol>
-      </details>
-      <p class="guide-note">已在 Clash Mi 1.0.31.1703 验证基础接入和 Tailscale 叠加流程；套餐分组请按新版订阅重新选择。IPv6、子网路由及网络切换需另行验证。</p>
-    </div>
-  </details>
-  <p class="subscription-note">Surge 与 sing-box MT 的接入指南将随对应客户端支持提供。</p>
-</section>
+    </details>
+    <p class="guide-note">已在 iPhone 上的 Clash Mi 1.0.31.1703 验证基础接入和 Tailscale 叠加流程；套餐分组请按新版订阅重新选择。IPv6、子网路由及网络切换需另行验证。</p>
+  </div>
+</details>

@@ -18,6 +18,11 @@ from urllib.request import Request, urlopen
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", default="monocloud-subscription:local")
+    parser.add_argument(
+        "--bind-data",
+        action="store_true",
+        help="Check host-directory persistence using the invoking user's UID/GID.",
+    )
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory(prefix="subscription-container-") as directory:
@@ -66,7 +71,17 @@ raise SystemExit(main(['--config', '/config/config.toml', 'serve']))
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             port = listener.getsockname()[1]
-        environment = dict(os.environ, BIND_ADDRESS="127.0.0.1", PORT=str(port))
+        uid, gid = (os.getuid(), os.getgid()) if args.bind_data else (10001, 10001)
+        if args.bind_data:
+            (temporary / "data").mkdir(mode=0o700)
+        environment = dict(
+            os.environ,
+            BIND_ADDRESS="127.0.0.1",
+            PORT=str(port),
+            APP_UID=str(uid),
+            APP_GID=str(gid),
+            DATA_DIR="./data" if args.bind_data else "subscription-data",
+        )
         command = ["docker", "compose", "-p", f"container-check-{secrets.token_hex(4)}"]
 
         def run(*arguments):
@@ -118,7 +133,8 @@ raise SystemExit(main(['--config', '/config/config.toml', 'serve']))
 import errno, importlib.util, os
 from pathlib import Path
 from monocloud_subscription.tokens import TokenStore
-assert os.getuid() == 10001
+assert os.getuid() == EXPECTED_UID
+assert os.getuid() != 0
 assert not Path('/app/.local').exists()
 assert not Path('/app/src').exists()
 assert importlib.util.find_spec('ruff') is None
@@ -134,7 +150,14 @@ store.save('fixture-token-updated')
 assert store.load() == 'fixture-token-updated'
 assert Path('/data/token.json').stat().st_mode & 0o777 == 0o600
 """
-            run("exec", "-T", "subscription", "python", "-c", probe)
+            run(
+                "exec",
+                "-T",
+                "subscription",
+                "python",
+                "-c",
+                probe.replace("EXPECTED_UID", str(uid)),
+            )
             with ThreadPoolExecutor(max_workers=1) as pool:
                 pending = pool.submit(
                     request,

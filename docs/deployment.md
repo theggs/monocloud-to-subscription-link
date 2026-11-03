@@ -2,7 +2,7 @@
 
 This document is for the person running the service. Account operations, plan/node
 selection and client import/update instructions belong to the management page's
-**客户端接入指南**. The README Quick start covers only the first local startup.
+**导入客户端**. The README Quick start covers only the first local startup.
 
 ## Docker Compose
 
@@ -34,11 +34,11 @@ docker compose up -d --build
 ```
 
 Open `http://127.0.0.1:8080/`, authenticate as `admin` using the password you chose,
-then follow the page's account login and client guide. The image installs locked
+then follow the page's steps: account, subscription contents, link and client import. The image installs locked
 production dependencies during build; startup does not install packages.
 
-By default Compose publishes only on host loopback. For phone access on a trusted
-LAN, set `server.public_url` in `.local/container.toml` to the reachable host URL
+By default Compose publishes only on host loopback. For access from other devices on a
+trusted LAN, set `server.public_url` in `.local/container.toml` to the reachable host URL
 (for example `http://192.168.1.10:8080`), then run:
 
 ```sh
@@ -49,6 +49,10 @@ Keep those environment overrides on subsequent Compose commands; `PORT` can also
 change the published host port. The internal listen address remains `0.0.0.0:8080`.
 Use the actual published port in `public_url`. For HTTPS deployment, publish to
 the reverse proxy as appropriate and follow the transport section below.
+For persistent settings, copy `deploy/compose.env.example` to the project-root
+`.env` and edit it instead of repeating shell overrides. Compose reads `.env`
+for interpolation; `.local/service.env` separately supplies the management
+password to the service. Both private locations are ignored by Git.
 
 ```sh
 docker compose logs --tail=50 subscription
@@ -101,6 +105,97 @@ test volume afterward; it never uses your `.local` credentials or running servic
 It replaces the upstream login with a 12-second fake response to verify that
 an active request can complete during a normal Compose stop, then recreates the
 container to check persisted state.
+Add `--bind-data` to verify a host-directory mount using your current non-root
+UID/GID instead of the default named volume.
+
+### NAS: keep the deployment under ~/docker/
+
+Place the application checkout or release files in
+`~/docker/monocloud-to-subscription-link/`. Keep that directory private; create
+the configuration and service environment file as above. To keep runtime data
+beside Compose, use a bind directory with the NAS account's UID/GID:
+
+```sh
+cd ~/docker/monocloud-to-subscription-link
+mkdir -p data .local
+chmod 700 data .local
+cp deploy/compose.env.example .env
+id -u
+id -g
+```
+
+Set the following in `.env`, replacing the example UID/GID with the values
+printed by `id`:
+
+```dotenv
+BIND_ADDRESS=0.0.0.0
+PORT=8080
+DATA_DIR=./data
+APP_UID=1000
+APP_GID=1000
+```
+
+Set `server.public_url` in `.local/container.toml` to the NAS address and
+published port reachable by your clients. The application still uses `/data`
+inside the container. The service runs as the configured non-root UID/GID;
+using the directory owner's IDs avoids changing unrelated NAS permissions.
+With that matching owner, the mounted TOML can use mode `600` as well.
+Only override UID/GID alongside an appropriately owned bind directory; the
+default named volume is initialized for UID/GID 10001.
+
+```sh
+chmod 600 .env .local/container.toml .local/service.env
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
+```
+
+On NAS systems where SSH's PATH omits the installed Docker CLI, add its actual
+installation directory to PATH for the session (for example `/usr/local/bin` on
+Synology). Do not change the Docker daemon or unrelated applications.
+
+If an official-template snapshot is needed, keep it in `.local/templates/`, set
+`template_dir = "/templates"` in the TOML, and create a private
+`compose.override.yaml` alongside Compose:
+
+```yaml
+services:
+  subscription:
+    volumes:
+      - type: bind
+        source: ./.local/templates
+        target: /templates
+        read_only: true
+        bind:
+          create_host_path: false
+```
+
+Compose automatically loads that override. Include only the verified official
+`update.json` and `Clash_ss` files; checks and operator refresh responsibilities
+remain unchanged. This override file is ignored by Git.
+
+Back up `data/`, `.local/` and `.env` privately. Update source/release files without
+overwriting those paths, then run `docker compose up -d --build`. An image built
+elsewhere must match the NAS architecture; transfer it with `docker save` /
+`docker load` and use `docker compose up -d --no-build`. For migrations, copy the
+saved token and subscription state into `data/` before the first start. Moving
+hosts changes the subscription base URL: clients need the new reachable URL,
+even when its secret path and Tailscale settings are preserved.
+
+For an amd64 NAS when building on an ARM workstation, use
+`docker build --platform linux/amd64 -t monocloud-subscription:local .`, then
+stream `docker save monocloud-subscription:local` over SSH to `docker load` on
+the NAS. This is also an alternative when registry or package downloads are
+slow on the NAS; it does not require changing daemon-wide registry settings.
+Transfer only the selected app configuration, token/state and optional official
+template separately from the source/image, rather than copying an entire local
+research/work directory.
+
+Verified with Linux amd64, Docker 24.0.2 and Compose 2.20.1: the host-directory
+UID/GID smoke check passed, followed by live management authentication, saved
+account verification, complete subscription generation and container recreation
+with the same login, subscription key and Tailscale setting. Deployment-specific
+addresses and credentials are not part of this repository.
 
 ## Management credentials
 
@@ -142,15 +237,15 @@ public_url = "http://192.168.1.10:8080"
 
 Replace the example IP with your server's reachable address. The bind wildcard
 is not a browser address. `public_url` is the base URL shown in subscription links;
-without it, links use the management browser's origin. A phone cannot reach a
-loopback URL belonging to the server. A reverse-proxy URL may include a mount
+without it, links use the management browser's origin. Other devices cannot
+reach a loopback URL belonging to the server. A reverse-proxy URL may include a mount
 prefix, for example `https://example.com/mono`. Configure the proxy to redirect
 `/mono` to `/mono/`, strip `/mono` when forwarding requests, and route the entire
 `/mono/` subtree to this service. Page assets and API calls resolve relative to
 that trailing-slash page URL. Subscription URLs use the configured `public_url`.
 
-The phone must be able to reach the address and port when importing/updating. For
-LAN deployment, confirm Wi-Fi connectivity and firewall permission for the exact
+Every device that uses the subscription must be able to reach the address and
+port when importing/updating. For LAN deployment, confirm LAN/Wi-Fi connectivity and firewall permission for the exact
 runtime executable. If loopback works but LAN connections reset, check that
 executable's incoming-connection rule; checking only its application bundle can
 miss a blocked executable. Do not disable the whole firewall for this service.
@@ -174,8 +269,8 @@ When using an HTTPS reverse proxy:
   in the proxy's access/debug logs. Application access logs are disabled, and
   management/download responses use `no-store`.
 
-The service distributes configuration; the phone connects to MonoCloud and Tailnet
-itself. Subscription updates outside the home network require a reachable server
+The service distributes configuration; each client device connects to MonoCloud and
+Tailnet itself. Subscription updates outside the home network require a reachable server
 URL; that access method is not selected by the application.
 
 ## Runtime state and official templates

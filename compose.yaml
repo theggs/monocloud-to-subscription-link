@@ -2,6 +2,7 @@ services:
   subscription:
     build: .
     image: monocloud-subscription:local
+    user: "${APP_UID:-10001}:${APP_GID:-10001}"
     restart: unless-stopped
     stop_grace_period: 35s
     env_file:
@@ -15,7 +16,7 @@ services:
         read_only: true
         bind:
           create_host_path: false
-      - subscription-data:/data
+      - ${DATA_DIR:-subscription-data}:/data
 
 volumes:
   subscription-data:

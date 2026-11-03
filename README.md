@@ -64,7 +64,7 @@ uv run --env-file .local/service.env monocloud-subscription --config .local/conf
 
 Open [http://127.0.0.1:8080](http://127.0.0.1:8080). The management username is
 `admin`; use the password you put in `.local/service.env`. Then follow the page's
-account connection and **客户端接入指南**. For phone/LAN access or HTTPS, see
+steps from account login to **导入客户端**. For LAN access from other devices or HTTPS, see
 [deployment](docs/deployment.md).
 
 ## Configuration and private data
@@ -126,7 +126,7 @@ entry and the corresponding Tailnet advertisement/authorization.
 
 First-time client authorization, plan/node selection, subscription updates and
 the optional Tailscale setup are documented in the management page's
-**客户端接入指南 → Clash Mi 接入**. Preserve each client's Tailscale state across
+**导入客户端 → Clash Mi**. Preserve each client's Tailscale state across
 restarts and refreshes. Generated subscriptions contain node passwords and any
 configured auth key; store and transfer them privately.
 

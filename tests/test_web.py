@@ -544,21 +544,54 @@ class VerifiedAccountTests(unittest.IsolatedAsyncioTestCase):
     async def test_page_embeds_clash_mi_guide_with_optional_overlay(self):
         page = await self.client().get("/")
         self.assertIn('id="guide-clash-mi"', page.text)
-        self.assertIn("基础接入", page.text)
+        self.assertIn('id="guide-clash-mi-tailscale"', page.text)
         self.assertIn("可选：增加 Tailscale 能力", page.text)
+        # Clash Mi never opens the authorization page itself; logs are the path.
+        self.assertIn("在“核心设置 → 日志等级”选择 info", page.text)
+        for assumption in ("若未自动出现授权页", "手机", "Safari"):
+            self.assertNotIn(assumption, page.text)
         self.assertNotIn("<!-- CLIENT_GUIDES -->", page.text)
         self.assertNotIn('id="guide-surge"', page.text)
         self.assertNotIn('id="guide-sing-box"', page.text)
+
+    async def test_page_is_a_client_neutral_four_step_flow(self):
+        page = (await self.client().get("/")).text
+        self.assertIn("<h1>设置你的代理订阅</h1>", page)
+        for step in ("step-account", "step-content", "step-link", "step-client"):
+            self.assertIn(f'id="{step}"', page)
+        self.assertIn("Surge、sing-box 格式尚未支持", page)
+        self.assertNotIn("admin</", page)
+        # Client names belong only to the mihomo link row and the client guide.
+        link_row = page.index('<div class="format-head">')
+        shared = (
+            page[: page.index('id="step-link"')]
+            + page[page.index('id="step-client"') : page.index('id="guide-clash-mi"')]
+        )
+        for name in ("mihomo", "Clash", "手机", "Safari"):
+            self.assertNotIn(name, shared)
+        self.assertIn("mihomo", page[link_row : page.index('id="guide-clash-mi"')])
 
     async def test_signed_out_verified_status_does_not_contact_upstream(self):
         result = await self.client().get("/api/status?verify=true")
         self.assertEqual(result.json()["account_state"], "signed_out")
         self.assertEqual(result.json()["plan_count"], 0)
+        self.assertEqual(result.json()["plan_names"], [])
         self.assertEqual(self.requests, [])
 
-    async def test_verified_saved_session_reports_service_count_without_account_data(
-        self,
-    ):
+    async def test_choice_saved_flag_tracks_first_save(self):
+        client = self.client()
+        self.assertFalse(
+            (await client.get("/api/subscription")).json()["tailscale_choice_saved"]
+        )
+        saved = await client.post(
+            "/api/subscription", json={"tailscale_enabled": False}
+        )
+        self.assertTrue(saved.json()["tailscale_choice_saved"])
+        self.assertTrue(
+            (await client.get("/api/subscription")).json()["tailscale_choice_saved"]
+        )
+
+    async def test_verified_saved_session_reports_plan_names_without_token(self):
         TokenStore(self.config.token_file).save("constructed-token")
         result = await self.client(
             payload=[
@@ -568,7 +601,7 @@ class VerifiedAccountTests(unittest.IsolatedAsyncioTestCase):
         ).get("/api/status?verify=true")
         self.assertEqual(result.json()["account_state"], "connected")
         self.assertEqual(result.json()["plan_count"], 2)
-        self.assertNotIn("private-plan-name", result.text)
+        self.assertEqual(result.json()["plan_names"], ["private-plan-name", "Other"])
         self.assertNotIn("constructed-token", result.text)
         self.assertEqual(self.requests[0].url.path, "/api/service")
 
