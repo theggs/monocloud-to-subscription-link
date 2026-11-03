@@ -563,9 +563,10 @@ class VerifiedAccountTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("admin</", page)
         # Client names belong only to the mihomo link row and the client guide.
         link_row = page.index('<div class="format-head">')
-        shared = page[: page.index('id="step-link"')] + page[
-            page.index('id="step-client"') : page.index('id="guide-clash-mi"')
-        ]
+        shared = (
+            page[: page.index('id="step-link"')]
+            + page[page.index('id="step-client"') : page.index('id="guide-clash-mi"')]
+        )
         for name in ("mihomo", "Clash", "手机", "Safari"):
             self.assertNotIn(name, shared)
         self.assertIn("mihomo", page[link_row : page.index('id="guide-clash-mi"')])

@@ -162,7 +162,8 @@ function renderContent(m) {
   $("content-error").textContent = error;
   show("content-error", Boolean(error));
   show("content-ts-note", m.subOk && m.chosen);
-  const pending = m.dirty || m.unchosen;
+  // A first-time confirmation waits until earlier steps are done.
+  const pending = m.dirty || (m.unchosen && m.active === 2);
   show("content-actions", m.subOk && pending);
   $("content-save").setAttribute("aria-busy", String(state.saving));
   $("content-save").disabled = state.saving;

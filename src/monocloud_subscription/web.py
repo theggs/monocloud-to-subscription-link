@@ -192,9 +192,7 @@ def create_app(
                     state = "expired"
                 except MonoCloudError:
                     state = "unavailable"
-            result.update(
-                account_state=state, plan_count=len(names), plan_names=names
-            )
+            result.update(account_state=state, plan_count=len(names), plan_names=names)
         return result
 
     @app.post("/api/login")
