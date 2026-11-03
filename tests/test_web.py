@@ -544,11 +544,31 @@ class VerifiedAccountTests(unittest.IsolatedAsyncioTestCase):
     async def test_page_embeds_clash_mi_guide_with_optional_overlay(self):
         page = await self.client().get("/")
         self.assertIn('id="guide-clash-mi"', page.text)
-        self.assertIn("基础接入", page.text)
+        self.assertIn('id="guide-clash-mi-tailscale"', page.text)
         self.assertIn("可选：增加 Tailscale 能力", page.text)
+        # Clash Mi never opens the authorization page itself; logs are the path.
+        self.assertIn("在“核心设置 → 日志等级”选择 info", page.text)
+        for assumption in ("若未自动出现授权页", "手机", "Safari"):
+            self.assertNotIn(assumption, page.text)
         self.assertNotIn("<!-- CLIENT_GUIDES -->", page.text)
         self.assertNotIn('id="guide-surge"', page.text)
         self.assertNotIn('id="guide-sing-box"', page.text)
+
+    async def test_page_is_a_client_neutral_four_step_flow(self):
+        page = (await self.client().get("/")).text
+        self.assertIn("<h1>设置你的代理订阅</h1>", page)
+        for step in ("step-account", "step-content", "step-link", "step-client"):
+            self.assertIn(f'id="{step}"', page)
+        self.assertIn("Surge、sing-box 格式尚未支持", page)
+        self.assertNotIn("admin</", page)
+        # Client names belong only to the mihomo link row and the client guide.
+        link_row = page.index('<div class="format-head">')
+        shared = page[: page.index('id="step-link"')] + page[
+            page.index('id="step-client"') : page.index('id="guide-clash-mi"')
+        ]
+        for name in ("mihomo", "Clash", "手机", "Safari"):
+            self.assertNotIn(name, shared)
+        self.assertIn("mihomo", page[link_row : page.index('id="guide-clash-mi"')])
 
     async def test_signed_out_verified_status_does_not_contact_upstream(self):
         result = await self.client().get("/api/status?verify=true")
