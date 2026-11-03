@@ -34,11 +34,11 @@ docker compose up -d --build
 ```
 
 Open `http://127.0.0.1:8080/`, authenticate as `admin` using the password you chose,
-then follow the page's account login and client guide. The image installs locked
+then follow the page's steps: account, subscription contents, link and client import. The image installs locked
 production dependencies during build; startup does not install packages.
 
-By default Compose publishes only on host loopback. For phone access on a trusted
-LAN, set `server.public_url` in `.local/container.toml` to the reachable host URL
+By default Compose publishes only on host loopback. For access from other devices on a
+trusted LAN, set `server.public_url` in `.local/container.toml` to the reachable host URL
 (for example `http://192.168.1.10:8080`), then run:
 
 ```sh
@@ -142,15 +142,15 @@ public_url = "http://192.168.1.10:8080"
 
 Replace the example IP with your server's reachable address. The bind wildcard
 is not a browser address. `public_url` is the base URL shown in subscription links;
-without it, links use the management browser's origin. A phone cannot reach a
-loopback URL belonging to the server. A reverse-proxy URL may include a mount
+without it, links use the management browser's origin. Other devices cannot
+reach a loopback URL belonging to the server. A reverse-proxy URL may include a mount
 prefix, for example `https://example.com/mono`. Configure the proxy to redirect
 `/mono` to `/mono/`, strip `/mono` when forwarding requests, and route the entire
 `/mono/` subtree to this service. Page assets and API calls resolve relative to
 that trailing-slash page URL. Subscription URLs use the configured `public_url`.
 
-The phone must be able to reach the address and port when importing/updating. For
-LAN deployment, confirm Wi-Fi connectivity and firewall permission for the exact
+Every device that uses the subscription must be able to reach the address and
+port when importing/updating. For LAN deployment, confirm LAN/Wi-Fi connectivity and firewall permission for the exact
 runtime executable. If loopback works but LAN connections reset, check that
 executable's incoming-connection rule; checking only its application bundle can
 miss a blocked executable. Do not disable the whole firewall for this service.
@@ -174,8 +174,8 @@ When using an HTTPS reverse proxy:
   in the proxy's access/debug logs. Application access logs are disabled, and
   management/download responses use `no-store`.
 
-The service distributes configuration; the phone connects to MonoCloud and Tailnet
-itself. Subscription updates outside the home network require a reachable server
+The service distributes configuration; each client device connects to MonoCloud and
+Tailnet itself. Subscription updates outside the home network require a reachable server
 URL; that access method is not selected by the application.
 
 ## Runtime state and official templates
