@@ -132,7 +132,8 @@ configured auth key; store and transfer them privately.
 
 Docker, direct execution, and systemd are deployment choices. They can use the
 same installed application entry point; no deployment method or fixed machine
-path is required by the project. See [deployment](docs/deployment.md) for
+path is required by the project. Optional [Docker Compose startup](docs/deployment.md#docker-compose)
+is provided with a non-root image and persistent data volume. See [deployment](docs/deployment.md) for
 management password setup, LAN addresses, HTTPS/reverse proxies and persistence.
 
 ## Development and checks

@@ -4,6 +4,98 @@ This document is for the person running the service. Account operations, plan/no
 selection and client import/update instructions belong to the management page's
 **客户端接入指南**. The README Quick start covers only the first local startup.
 
+## Docker Compose
+
+Requires Docker with the Compose plugin; host Python and uv are not needed.
+From the repository root:
+
+```sh
+mkdir -p .local
+chmod 700 .local
+cp deploy/config.example.toml .local/container.toml
+```
+
+Edit `.local/container.toml` to supply the private MonoCloud `client_id` and
+`client_secret`. Create `.local/service.env` containing your chosen management
+password (the same variable as direct execution):
+
+```dotenv
+MONOCLOUD_WEB_PASSWORD=replace-with-your-own-private-password
+```
+
+Keep the parent `.local` directory private. The mounted TOML must be readable by
+container UID 10001; the following uses file readability inside a private parent
+directory. The environment file is read by Compose, not the container user.
+
+```sh
+chmod 644 .local/container.toml
+chmod 600 .local/service.env
+docker compose up -d --build
+```
+
+Open `http://127.0.0.1:8080/`, authenticate as `admin` using the password you chose,
+then follow the page's account login and client guide. The image installs locked
+production dependencies during build; startup does not install packages.
+
+By default Compose publishes only on host loopback. For phone access on a trusted
+LAN, set `server.public_url` in `.local/container.toml` to the reachable host URL
+(for example `http://192.168.1.10:8080`), then run:
+
+```sh
+BIND_ADDRESS=0.0.0.0 docker compose up -d
+```
+
+Keep those environment overrides on subsequent Compose commands; `PORT` can also
+change the published host port. The internal listen address remains `0.0.0.0:8080`.
+Use the actual published port in `public_url`. For HTTPS deployment, publish to
+the reverse proxy as appropriate and follow the transport section below.
+
+```sh
+docker compose logs --tail=50 subscription
+docker compose restart subscription   # after editing mounted TOML
+docker compose up -d --force-recreate # after editing service.env
+docker compose down                 # retains the named data volume
+```
+
+The `subscription-data` named volume mounts the complete `/data` directory and
+preserves login tokens, subscription URL credentials and saved settings across
+container recreation. Do not use `down -v` unless deliberately discarding this
+state. Keep the same Compose project name when upgrading. Back up this volume
+privately. Do not mount individual JSON files: updates replace files atomically.
+For a host bind directory instead, grant UID/GID `10001:10001` write access first.
+Any custom `token_file` must also point into persisted writable storage.
+A fresh volume starts without an account login and creates a new subscription
+URL credential; it does not automatically import a direct installation's data.
+To migrate existing state, stop the old service, copy its complete data directory
+into the volume and set ownership to `10001:10001` before starting the container.
+Stop any existing listener on the same host port before switching deployments.
+
+The image runs as UID/GID `10001:10001`, with one Uvicorn process receiving stop
+signals directly. It needs no privileged mode, TUN device, or server-side
+Tailscale daemon. Client `tailscale.state_dir` remains a client-side path.
+For an explicit official template snapshot, add a read-only directory mount at
+`/templates`, make its files readable by UID 10001, and enable the example's
+`template_dir` setting. No snapshot or private configuration is baked into the
+image. `.dockerignore` allowlists build inputs; Git ignore rules alone are
+insufficient for this ([Docker documentation](https://docs.docker.com/build/concepts/context/#dockerignore-files)).
+
+Without Compose, build with `docker build -t monocloud-subscription:local .` and
+run the same image with your environment file, read-only config mount, persistent
+`/data` volume and port publishing. The default command uses
+`/config/config.toml`; arguments can override it. Building follows the
+[uv Docker integration](https://docs.astral.sh/uv/guides/integration/docker/)
+using a separate build stage; uv and build sources are absent from the runtime.
+
+For a repeatable smoke check with disposable configuration and fake credentials:
+
+```sh
+docker build -t monocloud-subscription:local .
+uv run --locked python scripts/check_container.py
+```
+
+The check creates its own randomly named Compose project and deletes only its
+test volume afterward; it never uses your `.local` credentials or running service.
+
 ## Management credentials
 
 The deployer chooses `MONOCLOUD_WEB_PASSWORD`; the application does not generate a

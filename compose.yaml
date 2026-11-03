@@ -1,0 +1,20 @@
+services:
+  subscription:
+    build: .
+    image: monocloud-subscription:local
+    restart: unless-stopped
+    env_file:
+      - .local/service.env
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8080}:8080"
+    volumes:
+      - type: bind
+        source: ./.local/container.toml
+        target: /config/config.toml
+        read_only: true
+        bind:
+          create_host_path: false
+      - subscription-data:/data
+
+volumes:
+  subscription-data:
