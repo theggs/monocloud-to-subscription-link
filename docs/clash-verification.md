@@ -113,3 +113,12 @@ opens the form, sign-out/expired credentials expand it, and upstream outages ret
 saved credentials without requesting a password retry. Login clears the password.
 The mobile guide's base/overlay details expand without horizontal overflow at
 390px. Wheel/sdist privacy checks pass and the bundled guide is included.
+
+## Account API evidence
+
+Static client inspection confirmed the password-grant form and OAuth credential
+source. Read-only requests confirmed the service/node endpoints, array structures,
+field types and request identity. Constructed-data integration tests cover login,
+token persistence, discovery and rejection; actual browser login and saved-token
+reuse were also verified. OAuth client credentials remain private and unbundled.
+This implementation evidence belongs here rather than in first-start instructions.

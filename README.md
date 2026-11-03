@@ -40,106 +40,32 @@ development dependency.
 
 ## Quick start
 
-Copy the generic example into the ignored local directory:
+Copy the example and fill in your private `monocloud.client_id` and
+`monocloud.client_secret` (see [configuration](#configuration-and-private-data)):
 
 ```sh
 mkdir -p .local
 cp config.example.toml .local/config.toml
-uv run monocloud-subscription --config .local/config.toml check
 ```
 
-The command prints `Configuration OK` and the configured data directory, then
-exits successfully. It does not create the directory, write credentials, contact
-MonoCloud, or start a server. A configuration error exits with status 2.
+Create `.local/service.env` with a management password you choose; replace the
+placeholder below:
 
-Before starting the service, distinguish its two credentials:
+```dotenv
+MONOCLOUD_WEB_PASSWORD=replace-with-your-own-private-password
+```
 
-- **Management login:** username `admin`; the deployer chooses a private password
-  and supplies it through `MONOCLOUD_WEB_PASSWORD` in the process environment.
-  The application does not generate a management password. Startup prints the
-  username and variable name, never the password. Obtain this password from your
-  deployer; your MonoCloud account password does not unlock the management prompt.
-- **MonoCloud account login:** your account email/password, entered only inside
-  the management page. Configure the private OAuth application parameters below.
-
-Local loopback access can run without management authentication when the variable
-is unset. Set it before LAN access; use your deployment's private environment
-configuration rather than committed files or command-line password arguments.
-Then start the service:
+Start the service:
 
 ```sh
-uv run monocloud-subscription --config .local/config.toml serve
+chmod 600 .local/config.toml .local/service.env
+uv run --env-file .local/service.env monocloud-subscription --config .local/config.toml serve
 ```
 
-Open [http://127.0.0.1:8080](http://127.0.0.1:8080), enter your account email and
-password under **登录 MonoCloud 账户**, and submit. The page verifies a saved session
-using service discovery. A confirmed connected account collapses the form; use
-**重新登录 / 切换账户** to open it. Rejected credentials open the form for login,
-while a temporary upstream outage is distinguished from an expired session and
-preserves saved credentials. It does not display tokens or OAuth client
-secrets. Failed login preserves the previous token. The password is cleared from
-the form after each attempt and is not stored by the application.
-
-The server defaults to loopback. Set `[server]` host/port in private TOML;
-`--host` and `--port` override them. Binding beyond loopback requires a `MONOCLOUD_WEB_PASSWORD` environment
-variable; browsers then prompt for username `admin` and that management password.
-This password controls access to the login page and is distinct from your MonoCloud
-account password. Supply it through your deployment's private environment, not
-committed configuration or command-line arguments. Remote HTTP transmits both
-account and management credentials without encryption, including over LAN/Wi-Fi.
-The service prints its listen URL and warns when binding beyond loopback. Use
-HTTPS for remote browser access; TLS termination remains a deployment choice.
-
-When using an HTTPS reverse proxy, forward the original `Host` and set
-`X-Forwarded-Proto`. Uvicorn trusts forwarded headers from loopback by default;
-if the proxy runs elsewhere, set `FORWARDED_ALLOW_IPS` to its specific trusted
-address. Do not trust arbitrary client-supplied forwarded headers. The Origin
-check still requires matching scheme, hostname and effective port. Request access
-logs are disabled. Management pages and APIs require this protection; native subscription downloads
-use only their secret URL credential, without HTTP Basic auth.
-
-Account interaction is available through the browser page. The command-line
-entry point is limited to starting the service and checking configuration.
-
-After login, use the **客户端订阅** card to copy the Clash/mihomo URL. In Clash Mi,
-add it under **我的配置 → + → 添加配置链接**, select that profile and connect in rule
-mode. In `Proxy`, choose a plan, then choose a node in that plan's group. Every
-available nonempty plan is included; there is no server-side plan filter. The
-first update from the former flat node list may reset the old selection: choose
-a plan/node once after upgrading. The URL remains stable across restarts. Toggle **启用 Tailscale**, save, then
-update the same profile in Clash Mi and reconnect; disabling it requires no
-Tailscale settings or authorization.
-
-The page's **客户端接入指南 → Clash Mi 接入** covers the base workflow, including
-plan selection and updates. Its optional Tailscale section extends that same
-profile and URL; it is not an alternative full setup. Surge and sing-box MT guides
-will accompany those client implementations; they are not offered as working
-setup flows yet.
-
-For a controlled home LAN, set `server.host` to your LAN listen address and
-`server.public_url` to the URL reachable by the phone, for example
-`http://192.168.1.10:8080` (replace this example with your own address). Supply the
-management password in the process environment and run the same `serve` command.
-The phone must be able to reach that host/port. Without `public_url`, links use the
-browser origin; a loopback URL cannot be imported from a phone. A reverse proxy
-may supply an HTTPS base URL with a mount prefix. Keep its own access/error logs
-from recording secret subscription paths, and do not cache responses.
-
-LAN HTTP exposes subscription URLs and returned credentials to observers on that
-network. Use it only within the controlled home-network transport assumption;
-use HTTPS for untrusted networks. This service is a configuration distributor:
-phone traffic goes to the configured proxy nodes/Tailnet directly. Updates require
-the server to be reachable; outside-home connectivity remains a deployment choice.
-
-**API verification limits:** static client inspection confirms the password-grant
-form and embedded OAuth client-credential source. Read-only GET requests using an
-existing session confirmed `/api/service`, `/api/shadowsocks/{service_id}`, their
-array responses, field types, and request identity. Tests use constructed data with
-the confirmed structure, without real account or node values. The user completed
-browser login, and the project reused its saved token for read-only service/node
-queries against the real API. Local HTTP integration tests also cover login,
-token persistence, discovery, and authentication failures. Configure OAuth client
-credentials privately; no client secrets are bundled.
+Open [http://127.0.0.1:8080](http://127.0.0.1:8080). The management username is
+`admin`; use the password you put in `.local/service.env`. Then follow the page's
+account connection and **客户端接入指南**. For phone/LAN access or HTTPS, see
+[deployment](docs/deployment.md).
 
 ## Configuration and private data
 
@@ -198,37 +124,30 @@ DNS uses the outbound's own resolver. Short MagicDNS names without the Tailnet
 suffix are not configured. Subnet routes require both a client configuration
 entry and the corresponding Tailnet advertisement/authorization.
 
-Without an auth key, enabled output raises `warning`/`error`/`silent` logging to
-`info` so mihomo's interactive login URL is visible. Keep client logs private;
-this does not enable subscription-server access logging. Clash Mi also applies
-its own core log-level override (default `error`): for first-time interactive
-authorization, set **核心设置 → 日志等级 → info**, reconnect, trigger a Tailnet
-request and open **核心日志 → ⋮ → 复制**. Paste the copied text into a private
-note, find `login.tailscale.com`, and open only the authorization URL in the
-browser. Keep the VPN connected until authorization and Tailnet access succeed;
-then test restart. Automatic opening was not observed in device testing. After
-authorization, the client log level can be lowered while retaining its state.
-
-Authorize the client using the core's login URL if the client exposes it, or
-supply a private auth key. Keep the same non-ephemeral device's client-side state
-directory across restarts and subscription refreshes; preserve it in the client
-sandbox or its deployment's persistent storage. Different devices should have
-separate state. A generated subscription contains node passwords and, when set,
-the Tailscale auth key: store and transfer it privately.
+First-time client authorization, plan/node selection, subscription updates and
+the optional Tailscale setup are documented in the management page's
+**客户端接入指南 → Clash Mi 接入**. Preserve each client's Tailscale state across
+restarts and refreshes. Generated subscriptions contain node passwords and any
+configured auth key; store and transfer them privately.
 
 Docker, direct execution, and systemd are deployment choices. They can use the
 same installed application entry point; no deployment method or fixed machine
-path is required by the project.
+path is required by the project. See [deployment](docs/deployment.md) for
+management password setup, LAN addresses, HTTPS/reverse proxies and persistence.
 
 ## Development and checks
 
 ```sh
 uv sync --locked
+uv run monocloud-subscription --config .local/config.toml check
 uv run python -m unittest discover -s tests -v
 uv run ruff check .
 uv run ruff format --check .
 uv build
 ```
+
+The `check` command validates configuration without writes, account requests or
+starting a server; configuration errors exit with status 2.
 
 To apply formatting, run `uv run ruff format .`. Commit `uv.lock` when changing
 dependencies so subsequent installs can use `uv sync --locked`.
