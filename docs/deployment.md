@@ -182,6 +182,21 @@ saved token and subscription state into `data/` before the first start. Moving
 hosts changes the subscription base URL: clients need the new reachable URL,
 even when its secret path and Tailscale settings are preserved.
 
+For an amd64 NAS when building on an ARM workstation, use
+`docker build --platform linux/amd64 -t monocloud-subscription:local .`, then
+stream `docker save monocloud-subscription:local` over SSH to `docker load` on
+the NAS. This is also an alternative when registry or package downloads are
+slow on the NAS; it does not require changing daemon-wide registry settings.
+Transfer only the selected app configuration, token/state and optional official
+template separately from the source/image, rather than copying an entire local
+research/work directory.
+
+Verified with Linux amd64, Docker 24.0.2 and Compose 2.20.1: the host-directory
+UID/GID smoke check passed, followed by live management authentication, saved
+account verification, complete subscription generation and container recreation
+with the same login, subscription key and Tailscale setting. Deployment-specific
+addresses and credentials are not part of this repository.
+
 ## Management credentials
 
 The deployer chooses `MONOCLOUD_WEB_PASSWORD`; the application does not generate a
