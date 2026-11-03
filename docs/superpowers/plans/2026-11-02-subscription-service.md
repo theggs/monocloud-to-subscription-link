@@ -23,7 +23,7 @@ last-good publishing, dashboard or deployment framework. Use feature branch.
   fake browser desktop/mobile QA; no personal credential replay.
 - [x] Docs/build/security: record transport/state/URL semantics, run Ruff/build/tests,
   ensure private state and configs excluded; prepare actual service for phone tests.
-- [ ] Record actual phone results as they occur; do not substitute a core parse.
+- [x] Record actual phone results as they occur; do not substitute a core parse.
 
 ## Review focus
 
@@ -32,6 +32,10 @@ remain protected while native subscription downloads avoid Basic auth. Existing
 URLs and toggles survive restart. Upstream/storage errors never echo secrets.
 Official snapshot validation must not bypass digest checks or invent fresh data.
 
-Validation: 90 tests pass; Ruff and build passed. Fake-data browser copy, download,
+Validation: 91 tests pass; Ruff and build passed. Fake-data browser copy, download,
 save/reload and 390px layout checked. Actual HTTP downloads in both modes pass
-mihomo v1.19.32 using the explicit verified official snapshot. Phone results pending.
+mihomo v1.19.32 using the explicit verified official snapshot. User-confirmed Clash Mi 1.0.31.1703 device results: pure-proxy import/update/node
+selection, combined public proxy + Tailnet IPv4/FQDN access, browser authorization,
+and reconnect/app restart/subscription update without new authorization. Read-only
+status confirms the same device identity, unchanged peer count and online state.
+IPv6/subnets, sleep/network changes and outside-home updates remain untested.

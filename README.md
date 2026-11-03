@@ -17,7 +17,8 @@ is tested against a local HTTP server using constructed credentials. Browser log
 and reuse of its saved token for service/node discovery have also been verified
 against MonoCloud. The browser page provides a protected Clash/mihomo subscription
 link and a persistent Tailscale toggle. Both generator modes pass core checks;
-Clash Mi URL import/update and device behavior remain pending. See
+Clash Mi 1.0.31.1703 URL import/update, both modes, Tailnet DNS/access and
+restart persistence have been verified on iPhone. See
 [verification](docs/clash-verification.md).
 
 ## Requirements and installation
@@ -178,9 +179,11 @@ Without an auth key, enabled output raises `warning`/`error`/`silent` logging to
 this does not enable subscription-server access logging. Clash Mi also applies
 its own core log-level override (default `error`): for first-time interactive
 authorization, set **核心设置 → 日志等级 → info**, reconnect, trigger a Tailnet
-request and open **核心日志**. If a login URL appears, open it privately in the
-browser. Automatic browser launching is not verified; after authorization, the
-client log level can be lowered again while retaining its state directory.
+request and open **核心日志 → ⋮ → 复制**. Paste the copied text into a private
+note, find `login.tailscale.com`, and open only the authorization URL in the
+browser. Keep the VPN connected until authorization and Tailnet access succeed;
+then test restart. Automatic opening was not observed in device testing. After
+authorization, the client log level can be lowered while retaining its state.
 
 Authorize the client using the core's login URL if the client exposes it, or
 supply a private auth key. Keep the same non-ephemeral device's client-side state
@@ -213,7 +216,7 @@ are written to ignored `dist/`. Only application source
 and declared package metadata belong in distributions; local configuration and
 private research must remain excluded.
 
-The generator's Python API is intended for the subscription web layer in #4;
+The subscription web layer uses the generator's Python API;
 no account or generation CLI workflow is added:
 
 ```python
