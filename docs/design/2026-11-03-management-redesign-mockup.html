@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>管理界面重设计 · 方案 A v5</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#d9dbe0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;cursor:pointer;color:inherit}input{font:inherit}
+/* ---------- mockup chrome (not part of design) ---------- */
+.chrome{position:sticky;top:0;z-index:50;background:#16181d;color:#c9ccd3;padding:9px 14px;display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;font-size:12px}
+.chrome .grp{display:flex;gap:4px;align-items:center;flex-wrap:wrap}.chrome b{color:#fff;font-weight:600;margin-right:4px}
+.chrome button{background:#2a2d35;border:0;border-radius:6px;padding:5px 9px;font-size:12px;color:#c9ccd3}
+.chrome button[aria-pressed=true]{background:#e7ebf3;color:#16181d}
+.stage{padding:24px 16px 40px;display:flex;justify-content:center}
+.device{width:100%;max-width:1100px;height:820px;border-radius:12px;overflow:hidden;box-shadow:0 20px 60px -30px #0006;container-type:inline-size;position:relative;background:#fafafa}
+.device.mobile{max-width:390px;height:844px;border-radius:34px;border:9px solid #111}
+.screen{height:100%;overflow:auto;position:relative}
+.fold{position:absolute;left:0;right:0;border-top:2px dashed #e0445588;pointer-events:none;z-index:30}
+.fold span{position:absolute;right:8px;top:-18px;font-size:10px;color:#e04455;background:#fff;padding:0 4px;border-radius:3px}
+.annot{max-width:1100px;margin:0 auto 40px;padding:0 16px;font-size:13px;color:#33363d;line-height:1.85}
+.annot h3{margin:12px 0 4px;font-size:14px}
+
+/* ---------- design ---------- */
+.A{--bg:#fafafa;--surface:#fff;--ink:#0f1115;--sub:#5d6470;--faint:#9aa0aa;--line:#e8e9ec;--accent:#2f5bff;--accent-soft:#eef2ff;--ok:#12805c;--ok-soft:#e8f6f0;--warn:#a15c00;--warn-soft:#fff5e5;--err:#c4291c;--err-soft:#fdeeec;background:var(--bg);color:var(--ink);min-height:100%;font-size:14px}
+.A :focus-visible{outline:3px solid #9db1ff;outline-offset:2px}
+.A .bar{display:flex;align-items:center;padding:0 28px;height:52px;border-bottom:1px solid var(--line);background:var(--surface);position:sticky;top:0;z-index:5}
+.A .logo{display:flex;align-items:center;gap:9px;font-weight:650}
+.A .logo i{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#2f5bff,#7a5cff);display:block}
+.A main{max-width:680px;margin:0 auto;padding:28px 20px 80px}
+.A h1{font-size:24px;letter-spacing:-.02em;margin:0 0 4px;font-weight:700}
+.A .lead{color:var(--sub);margin:0 0 20px;line-height:1.7}
+.A .lead b{color:var(--ink);font-weight:600}
+.A .steps{list-style:none;margin:0;padding:0;position:relative}
+.A .steps:before{content:"";position:absolute;left:15px;top:20px;bottom:20px;width:2px;background:var(--line)}
+.A .step{position:relative;padding-left:48px;margin-bottom:12px}
+.A .num{position:absolute;left:0;top:12px;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:650;background:var(--surface);border:2px solid var(--line);color:var(--faint)}
+.A [data-s=done] .num{background:var(--ok);border-color:var(--ok);color:#fff}
+.A [data-s=active] .num{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+.A [data-s=blocked] .num{border-color:var(--err);color:var(--err)}
+.A [data-s=warn] .num{border-color:var(--warn);color:var(--warn)}
+.A .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.A [data-s=active] .panel{border-color:#cdd7ff;box-shadow:0 6px 24px -14px #2f5bff55}
+.A [data-s=idle] .panel{background:#fcfcfd}
+.A [data-s=idle] .ph h2{color:#4a505b}
+.A .ph{display:flex;align-items:center;gap:10px 12px;padding:13px 16px;min-height:56px;flex-wrap:wrap}
+.A .ph .tt{flex:1;min-width:0}
+.A .ph h2{font-size:15px;margin:0;font-weight:620;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.A .ph .meta{font-size:12.5px;color:var(--sub);margin-top:2px;line-height:1.6}
+.A .pb{padding:0 16px 16px}
+.A .txt{font-size:12.5px;color:var(--sub);line-height:1.7;margin:0}
+.A .txt b{color:var(--ink);font-weight:600}
+.A .link{background:none;border:0;padding:0;color:var(--accent);font-size:13px;font-weight:550;text-decoration:none}
+.A .link:hover{text-decoration:underline}
+.A .btn{height:40px;padding:0 16px;border-radius:10px;border:0;background:var(--ink);color:#fff;font-weight:600;font-size:13.5px;display:inline-flex;align-items:center;gap:8px;justify-content:center;white-space:nowrap}
+.A .btn.blue{background:var(--accent)}
+.A .btn.ghost{background:var(--surface);color:var(--ink);border:1px solid var(--line)}
+.A .btn.sm{height:34px;padding:0 12px;font-size:13px}
+.A .btn:disabled{opacity:.45;cursor:not-allowed}
+.A .btn.full{width:100%}
+.A .spin{width:14px;height:14px;border:2px solid #ffffff60;border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.A .fld{margin-top:12px}.A .fld label{display:block;font-size:12.5px;font-weight:600;margin-bottom:6px}
+.A .fld input{width:100%;height:42px;border-radius:10px;border:1px solid var(--line);padding:0 12px;background:#fff}
+.A .fld input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.A .pw{position:relative}.A .pw input{padding-right:64px}.A .pw button{position:absolute;right:6px;top:6px;height:30px;border:0;background:#f2f3f5;border-radius:7px;font-size:12px;padding:0 10px;color:var(--sub)}
+.A .hint{font-size:12px;color:var(--sub);background:#f6f7f9;border-radius:10px;padding:10px 12px;line-height:1.7;margin:0}
+.A .hint b{color:var(--ink)}
+.A .alert{border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.7;margin-top:10px}
+.A .alert.err{background:var(--err-soft);color:var(--err)}.A .alert.warn{background:var(--warn-soft);color:var(--warn)}.A .alert.ok{background:var(--ok-soft);color:var(--ok)}
+.A .pill{font-size:11.5px;padding:3px 9px;border-radius:999px;font-weight:550;white-space:nowrap}
+.A .pill.ok{background:var(--ok-soft);color:var(--ok)}.A .pill.warn{background:var(--warn-soft);color:var(--warn)}.A .pill.err{background:var(--err-soft);color:var(--err)}.A .pill.mute{background:#f0f1f3;color:var(--sub)}
+.A .urlrow{display:flex;gap:8px;align-items:stretch}
+.A .url{flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;color:#3a3f48;background:#fbfbfc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.A .url.expanded{white-space:normal;word-break:break-all}
+.A .row{display:flex;gap:6px 16px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:12.5px}
+.A .faint{color:var(--faint);font-size:12px}
+.A .flow{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;flex-wrap:wrap}
+.A .flow span{background:var(--accent-soft);color:var(--accent);padding:1px 8px;border-radius:7px;font-weight:550}
+.A .flow i{font-style:normal;color:var(--faint)}
+/* compact segmented choice for step 2 */
+.A .seg{display:inline-flex;background:#f2f3f5;border-radius:10px;padding:3px;border:0;margin:0}
+.A .seg label{position:relative;border-radius:8px;padding:6px 12px;font-size:13px;color:var(--sub);cursor:pointer;white-space:nowrap}
+.A .seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.A .seg label:has(input:checked){background:#fff;color:var(--ink);font-weight:600;box-shadow:0 1px 3px #0001}
+.A .seg label:has(input:focus-visible){outline:3px solid #9db1ff}
+.A .seg label:has(input:disabled){cursor:not-allowed;opacity:.6}
+/* inline guide */
+.A .fmt-h{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin:0 0 8px;font-size:13px}
+.A .fmt-h span{font-size:12px;color:var(--faint)}
+.A .clients{display:grid;gap:8px}
+.A details.client{border:1px solid var(--line);border-radius:12px;background:#fff}
+.A details.client>summary{list-style:none;cursor:pointer;padding:11px 40px 11px 14px;position:relative;display:flex;flex-direction:column;gap:2px}
+.A details.client>summary::-webkit-details-marker{display:none}
+.A details.client>summary:after{content:"展开";position:absolute;right:14px;top:12px;font-size:12px;color:var(--accent);font-weight:550}
+.A details.client[open]>summary:after{content:"收起"}
+.A .cname{display:flex;gap:8px;align-items:center;font-size:14px}
+.A .cquick{font-size:12px;color:var(--sub)}
+.A details.client[open]>summary .cquick{display:none}
+.A .cbody{padding:0 14px 12px;border-top:1px solid var(--line);padding-top:12px}
+.A .gtitle{font-size:13px;font-weight:650;margin:0 0 8px}
+.A .gl{list-style:none;padding:0;margin:0;counter-reset:g}
+.A .gl>li{counter-increment:g;position:relative;padding:0 0 10px 30px;font-size:12.5px;line-height:1.7;color:var(--sub)}
+.A .gl>li:before{content:counter(g);position:absolute;left:0;top:1px;width:20px;height:20px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:650;display:grid;place-items:center}
+.A .gl>li b{color:var(--ink);font-weight:600}
+.A details.ext{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:0 12px;background:#fbfbfc}
+.A details.ext>summary{cursor:pointer;padding:10px 0;font-size:13px;font-weight:600;display:flex;justify-content:space-between;gap:8px}
+.A details.ext>summary small{font-weight:400;color:var(--faint)}
+.A details.ext details{margin:4px 0 2px}
+.A details.ext details summary{cursor:pointer;font-size:12.5px;color:var(--ink)}
+.A details.ext details ol{margin:4px 0;padding-left:18px}
+.A .gfoot{font-size:11.5px;color:var(--faint);line-height:1.7;margin:10px 0 0}
+.A .toast{position:sticky;bottom:16px;margin:18px auto 0;width:max-content;max-width:92%;background:var(--ok);color:#fff;border-radius:999px;padding:9px 16px;font-size:13px;box-shadow:0 10px 30px -10px #0006;z-index:6}
+@container (max-width:600px){
+  .A .bar{padding:0 16px}.A main{padding:18px 14px 80px}.A h1{font-size:20px}.A .lead{margin-bottom:14px;font-size:13px}
+  .A .step{padding-left:36px;margin-bottom:10px}.A .steps:before{left:12px}
+  .A .num{width:26px;height:26px;font-size:12px;top:14px}
+  .A .ph{padding:12px 14px;min-height:52px}.A .pb{padding:0 14px 14px}
+  .A .urlrow{flex-direction:column}
+}
+</style>
+</head>
+<body>
+<div class="chrome">
+  <div class="grp"><b>账户</b>
+    <button data-k="acct" data-v="checking">检查中</button>
+    <button data-k="acct" data-v="signed_out">未登录</button>
+    <button data-k="acct" data-v="connected">已验证</button>
+    <button data-k="acct" data-v="connected_empty">已验证·无套餐</button>
+    <button data-k="acct" data-v="expired">已失效</button>
+    <button data-k="acct" data-v="unavailable">暂时无法验证</button>
+  </div>
+  <div class="grp"><b>OAuth</b><button data-k="oauth" data-v="yes">已配置</button><button data-k="oauth" data-v="no">缺失</button></div>
+  <div class="grp"><b>异常</b>
+    <button data-k="fault" data-v="none">无</button>
+    <button data-k="fault" data-v="login_err">登录失败</button>
+    <button data-k="fault" data-v="sub_err">订阅读取失败</button>
+    <button data-k="fault" data-v="save_err">保存失败</button>
+    <button data-k="fault" data-v="copy_err">复制失败</button>
+    <button data-k="fault" data-v="loopback">本机地址</button>
+  </div>
+  <div class="grp"><b>订阅内容</b><button data-k="chosen" data-v="yes">已保存过</button><button data-k="chosen" data-v="no">从未保存（首次）</button></div>
+  <div class="grp"><b>视口</b><button data-k="view" data-v="desktop">桌面</button><button data-k="view" data-v="mobile">手机 390×844</button></div>
+</div>
+<div class="stage"><div class="device" id="device"><div class="screen" id="screen"></div></div></div>
+<div class="annot">
+  <h3>方案 A v5 · 引导式</h3>
+  流程仍是 ① 账户 → ② 订阅内容 → ③ 订阅链接 → ④ 导入客户端，但按“访问重心是订阅链接”压缩前两步：账户验证后 ① 收成一行；② 是一行内的二选一（仅代理 / 代理 + Tailscale），不必展开。
+  已验证的回访用户打开页面，订阅链接位于第一屏（红色虚线为首屏底线）。
+  客户端无关原则：标题、下一步提示、① 账户、② 订阅内容都不提任何客户端或内核；③ ④ 的步骤标题也保持通用，客户端/格式名称只出现在各自的链接行和接入说明分节里。
+  ③ 按格式列出链接行，目前只有已实现的 mihomo 一行；Surge、sing-box 只用一句说明“尚未支持”，不出现链接、按钮或切换项。
+  ② 首次（服务端保存值为空）时是当前步骤，需点“确认”；保存过选择的回访用户直接到 ③。下载配置文件或手动复制同样会把 ④ 设为当前步骤。
+  ④ 接入说明正文沿用原有 static/guides/clash-mi.html（已在设备上验证的步骤），只改动指向本页控件的说法；不新增未经验证的说明。每个客户端一行可折叠条目（沿用原界面 Clash Mi 接入的 details 结构）：收起时显示客户端名、格式和一句关键操作；展开后是该客户端完整步骤，Tailscale 步骤作为该客户端内的折叠段落（订阅包含 Tailscale 时默认展开）。以后加 Surge、sing-box MT 只是多一行，不会拉长页面。条目默认收起，④ 成为当前步骤（复制链接后）时自动展开。
+  <p style="color:#777">方案稿，数据均为虚构。可点：复制、显示密码、切换账户、登录（模拟）、订阅内容切换/保存/撤销、指南折叠。</p>
+</div>
+
+<script>
+const URL_OK = "https://sub.example.test/subscriptions/EXAMPLE0000000000000000000000000000000000/clash.yaml";
+const URL_LB = "http://127.0.0.1:8080/subscriptions/EXAMPLE0000000000000000000000000000000000/clash.yaml";
+const PLANS = ["Example Plan A","Example Plan B"];
+const S = {acct:"connected",oauth:"yes",fault:"none",view:"desktop",chosen:"yes",
+  tsSaved:false,tsDraft:false,tsChosen:true,tsSaving:false,tsJustSaved:false,saveTried:false,
+  copied:false,toast:"",relogin:false,urlOpen:false,loggingIn:false,email:"",tsOpen:null};
+
+function model(){
+  const a=S.acct, oauth=S.oauth==="yes", relogin=S.relogin;
+  const verified = a==="connected"||a==="connected_empty";
+  const plans = a==="connected"?PLANS:[];
+  const needLogin = a==="signed_out"||a==="expired"||relogin;
+  const subOk = S.fault!=="sub_err" && a!=="checking";
+  const dirty = S.tsDraft!==S.tsSaved;
+  const unchosen = !S.tsChosen;
+  let active;
+  if (needLogin||a==="checking"||a==="unavailable"||a==="connected_empty") active=1;
+  else if (!subOk||dirty||unchosen) active=2;
+  else active = S.copied?4:3;
+  return {a,oauth,verified,plans,needLogin,canLogin:needLogin&&oauth,subOk,dirty,unchosen,active,relogin};
+}
+function stepState(n,m){
+  if (n===m.active){
+    if(n===1&&m.needLogin&&!m.oauth) return "blocked";
+    if(n===1&&(m.a==="unavailable"||m.a==="connected_empty")) return "warn";
+    if(n===2&&!m.subOk) return "blocked";
+    return "active";
+  }
+  if (n<m.active && (n!==1||m.verified)) return "done";
+  return "idle";
+}
+const vh='position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)';
+function step(n,s,head,body,id){
+  const glyph = s==="done"?"✓":n;
+  return `<li class="step" ${id?`id="${id}"`:""} data-s="${s}" ${["active","warn","blocked"].includes(s)?'aria-current="step"':""}><span class="num"><span style="${vh}">步骤 ${n}${s==="done"?"，已完成":""}</span><span aria-hidden="true">${glyph}</span></span><div class="panel"><div class="ph">${head}</div>${body?`<div class="pb">${body}</div>`:""}</div></li>`;
+}
+
+/* 1 account — collapses to one line once verified */
+function acctStep(m){
+  const s=stepState(1,m);
+  let pill="", title="MonoCloud 账户", meta="";
+  if (m.a==="checking"){pill=`<span class="pill mute">检查中…</span>`;}
+  else if (m.relogin){title="切换 MonoCloud 账户";meta="登录成功后替换当前账户；取消或失败时保留原账户。";}
+  else if (m.a==="signed_out"){title="登录 MonoCloud 账户";meta="使用你的 MonoCloud 邮箱和密码。";}
+  else if (m.a==="expired"){title="重新登录 MonoCloud 账户";pill=`<span class="pill err">登录已失效</span>`;meta="失效期间，客户端无法更新订阅。";}
+  else if (m.a==="unavailable"){pill=`<span class="pill warn">暂时无法验证</span>`;meta="已保存登录，但现在无法确认账户状态。";}
+  else if (m.a==="connected_empty"){pill=`<span class="pill warn">没有可用套餐</span>`;meta="账户已验证，但目前没有可用套餐。";}
+  else {pill=`<span class="pill ok">已验证</span>`;meta=`${m.plans.length} 个可用套餐：${m.plans.join("、")}`;}
+  if (m.needLogin && !m.oauth) pill=`<span class="pill err">暂时无法登录</span>`;
+  const side = (m.verified||m.a==="unavailable") && !m.relogin ? `<button class="link" data-act="relogin">${m.a==="unavailable"?"重新登录":"切换账户"}</button>` : "";
+  const head=`<div class="tt"><h2>${title} ${pill}</h2>${meta?`<div class="meta">${meta}</div>`:""}</div>${side}`;
+
+  let body="";
+  if (m.needLogin && !m.oauth){
+    body=`<div class="alert err" style="margin-top:0">此服务还没有完成 MonoCloud 登录配置。请联系部署者处理，完成后刷新本页再登录。</div>${m.relogin?`<div class="row"><button class="link" data-act="relogin">取消</button></div>`:""}`;
+  } else if (m.canLogin){
+    const busy=S.loggingIn;
+    body=`<p class="hint">这里填 <b>MonoCloud 账户</b>的密码，不是打开本页时输入的管理密码。密码只用于这次登录，不会保存；登录后本服务会保存登录凭据，下次无需重新登录。</p>
+      <form data-form="login" ${busy?'aria-busy="true"':""}>
+      <div class="fld"><label for="em">邮箱</label><input id="em" type="email" autocomplete="username" placeholder="you@example.com" value="${S.email}" ${busy?"disabled":""}></div>
+      <div class="fld"><label for="pwd">密码</label><div class="pw"><input id="pwd" type="password" autocomplete="current-password" ${busy?"disabled":""}><button type="button" data-act="pw" aria-label="显示密码" aria-pressed="false" ${busy?"disabled":""}>显示</button></div></div>
+      ${S.fault==="login_err"&&!busy?`<div class="alert err" role="alert">登录未通过，请检查邮箱和密码后重试。</div>`:""}
+      <div class="row" style="margin-top:14px"><button class="btn blue full" type="submit" ${busy?"disabled":""}>${busy?'<span class="spin"></span>正在登录…':"登录"}</button></div>
+      ${m.relogin?`<div class="row" style="justify-content:center"><button type="button" class="link" data-act="relogin">取消，保留当前账户</button></div>`:""}
+      </form>`;
+  } else if (m.a==="unavailable"){
+    body=`<p class="txt">可能是 MonoCloud 暂时无法访问。稍后重试即可，不必重新输入密码。</p><div class="row"><button class="btn blue sm" data-act="noop">重新验证</button></div>`;
+  } else if (m.a==="connected_empty"){
+    body=`<p class="txt">请在 MonoCloud 确认套餐状态，然后回来重新验证。</p><div class="row"><button class="btn blue sm" data-act="noop">重新验证</button></div>`;
+  }
+  return step(1,s,head,body);
+}
+
+/* 2 subscription contents — one-line choice */
+function contentStep(m){
+  const s=stepState(2,m), loading=m.a==="checking";
+  if (loading) return step(2,s,`<div class="tt"><h2>订阅内容</h2><div class="meta">读取中…</div></div>`,"");
+  if (!m.subOk) return step(2,s,`<div class="tt"><h2>订阅内容</h2></div>`,`<div class="alert err" style="margin-top:0">无法读取订阅设置。请确认服务正在运行，然后重试。</div><div class="row"><button class="btn blue sm" data-act="noop">重试</button></div>`);
+  const dis=S.tsSaving?"disabled":"";
+  const head=`<div class="tt"><h2 id="c-l">订阅内容 ${m.dirty?'<span class="pill warn">未保存</span>':""}</h2></div>
+    <fieldset class="seg" aria-labelledby="c-l">
+      <label><input type="radio" name="c" data-act="ts" data-v="0" ${!S.tsDraft?"checked":""} ${dis}>仅代理</label>
+      <label><input type="radio" name="c" data-act="ts" data-v="1" ${S.tsDraft?"checked":""} ${dis}>代理 + Tailscale</label>
+    </fieldset>`;
+  let body="";
+  if (S.tsDraft) body+=`<p class="faint" style="margin:0">客户端第一次访问 Tailnet 时，需要完成一次 Tailscale 授权。具体步骤见各客户端的接入说明。</p>`;
+  if (m.unchosen && !m.dirty){
+    body+=`<div class="row"><button class="btn blue sm" data-act="ts-save" ${dis}>${S.tsSaving?'<span class="spin"></span>正在保存…':"确认"}</button><span class="faint">之后可以随时修改，链接不变</span></div>`;
+  } else if (m.dirty){
+    const err=S.fault==="save_err"&&!S.tsSaving&&S.saveTried;
+    body+=`${err?`<div class="alert err" role="alert">保存失败，你的选择仍保留，请重试。</div>`:""}
+      <div class="row"><button class="btn blue sm" data-act="ts-save" ${dis}>${S.tsSaving?'<span class="spin"></span>正在保存…':err?"重试保存":"保存"}</button><button class="link" data-act="ts-reset" ${dis}>撤销</button><span class="faint">订阅链接不变</span></div>`;
+  } else if (S.tsJustSaved){
+    body+=`<div class="alert ok">已保存。如果客户端已导入这份订阅，请在客户端更新订阅并重新连接。</div>`;
+  }
+  return step(2,s,head,body);
+}
+
+/* 3 link — the page's focal point */
+function linkStep(m){
+  const s=stepState(3,m);
+  const head=`<div class="tt"><h2>订阅链接</h2><div class="meta">不同客户端使用不同格式的链接</div></div>`;
+  const later=`<p class="faint" style="margin:10px 0 0">Surge、sing-box 格式尚未支持。</p>`;
+  if (m.a==="checking") return step(3,s,head,"");
+  if (!m.subOk) return step(3,s,head,`<p class="txt">订阅读取恢复后在这里显示。</p>`);
+  if (m.needLogin || m.a==="connected_empty")
+    return step(3,s,head,`<p class="txt">${m.a==="connected_empty"?"账户有可用套餐后，客户端才能从这个链接获取配置。":"登录账户后，在这里复制链接。"}</p>`);
+  const url = S.fault==="loopback"?URL_LB:URL_OK;
+  let body="";
+  if (m.dirty) body+=`<div class="alert warn" style="margin:0 0 10px">订阅内容的修改还没保存。这个链接目前提供的是已保存的内容（${S.tsSaved?"代理 + Tailscale":"仅代理"}）。</div>`;
+  body+=`<div class="fmt-h"><b>mihomo</b><span>Clash Mi 等 mihomo 内核客户端</span></div><div class="urlrow"><div class="url ${S.urlOpen?"expanded":""}" id="u">${url}</div><button class="btn ${s==="active"?"blue":"ghost"}" data-act="copy">${S.copied?"已复制":"复制链接"}</button></div>
+    <div class="row"><button class="link" data-act="urlopen" aria-expanded="${S.urlOpen}">${S.urlOpen?"收起":"显示完整链接"}</button><a class="link" href="#" data-act="download">下载配置文件</a><span class="faint">链接含访问凭据，不要分享给他人</span></div>`;
+  if (S.fault==="loopback") body+=`<div class="alert warn">这是本机地址，只有运行本服务的这台机器能用，其他设备无法访问。请联系部署者配置其他设备可访问的地址。</div>`;
+  if (S.fault==="copy_err") body+=`<div class="alert warn" role="status">无法自动复制。已展开并选中链接，请手动复制，然后按下面的说明导入。</div>`;
+  if (m.a==="unavailable") body+=`<div class="alert warn">账户暂时无法验证，客户端现在更新可能失败。可以先复制，稍后再更新。</div>`;
+  return step(3,s,head,body+later,"step-link");
+}
+
+/* 4 client — one collapsible row per client; future clients add rows */
+function clientStep(m){
+  const s=stepState(4,m);
+  const head=`<div class="tt"><h2>导入客户端</h2><div class="meta">选择你使用的客户端，展开查看步骤</div></div>`;
+  const planTxt = m.plans.length?`可选套餐：${m.plans.join("、")}。`:"";
+  const tsOpen = S.tsOpen??S.tsSaved;
+  const clientOpen = S.clientOpen??(s==="active");
+  const body=`<div class="clients">
+    <details class="client" id="c-clashmi" ${clientOpen?"open":""}>
+    <summary><span class="cname"><b>Clash Mi</b><span class="pill mute">mihomo 格式</span></span><span class="cquick">我的配置 → + → 添加配置链接</span></summary>
+    <div class="cbody">
+    <ol class="gl">
+      <li><b>确认网络。</b>使用订阅的设备需能访问本服务。家庭局域网部署时，先连接同一局域网（如同一 Wi-Fi）；在其他设备上，订阅地址不能是 127.0.0.1 或 localhost。</li>
+      <li><b>连接账户。</b>在本页登录 MonoCloud。已连接时账户显示为一行，更换账户可点“切换账户”。管理入口的用户名是 admin，管理密码向部署者获取，与 MonoCloud 账户密码不同。</li>
+      <li><b>添加订阅。</b>复制本页链接，在 Clash Mi 的“我的配置 → + → 添加配置链接”中粘贴并保存，选中该配置。</li>
+      <li><b>选择套餐和节点。</b>使用规则模式；在 Proxy 组选择套餐，再在对应套餐组选择节点。${planTxt}GLOBAL 对应全局模式，日常分流使用规则模式。</li>
+      <li><b>连接并验证。</b>开启连接，按系统提示允许 VPN，确认常用国内外网站能访问。切换节点仍在对应套餐组操作。</li>
+      <li><b>更新配置。</b>在 Clash Mi 手动更新同一订阅，重新连接。链接保持不变；首次升级到套餐分组时，请重新选择一次套餐和节点。</li>
+    </ol>
+    <details class="ext" id="ts-guide" ${tsOpen?"open":""}><summary>可选：增加 Tailscale 能力<small>在原配置上叠加</small></summary>
+      <ol class="gl">
+        <li><b>开启并更新。</b>在本页“订阅内容”选择“代理 + Tailscale”并保存，然后在 Clash Mi 更新原订阅、重新连接，不需要另建配置或更换链接。</li>
+        <li><b>触发首次连接。</b>访问你自己的 Tailnet IP 或完整域名。Tailscale 按需启动，首次请求可能短暂超时。</li>
+        <li><b>获取授权链接。</b>在“核心设置 → 日志等级”选择 info，重新连接并触发访问。打开“核心日志 → 右上角 ⋮ → 复制”，粘贴到私人备忘录，搜索 login.tailscale.com，打开 go to: 后面的完整链接。不要把整份日志粘贴进浏览器搜索框。</li>
+        <li><b>完成授权。</b>保持 Clash Mi 的 VPN 连接，在浏览器登录 Tailscale 并确认设备加入自己的 Tailnet。等待连接就绪后，再访问 Tailnet IP 和完整域名，同时确认公网网站仍正常。</li>
+        <li><b>保留设备身份。</b>重启或更新订阅后应无需重新授权。保留同一配置及客户端状态目录，不要清除 Tailscale 状态。授权完成后可调低客户端日志等级。</li>
+        <li><b>关闭可选能力。</b>在本页“订阅内容”改回“仅代理”，保存后更新原订阅并重连，基础代理继续使用。不要为此删除客户端状态。</li>
+      </ol>
+    </details>
+    <p class="gfoot">已在 iPhone 上的 Clash Mi 1.0.31.1703 验证基础接入和 Tailscale 叠加流程；套餐分组请按新版订阅重新选择。IPv6、子网路由及网络切换需另行验证。</p>
+    </div></details>
+    </div>
+    <p class="gfoot">Surge、sing-box 的接入说明将随对应格式一起提供。</p>`;
+  return step(4,s,head,body);
+}
+
+function lead(m){
+  if (m.a==="checking") return "正在检查账户…";
+  if (m.needLogin && !m.oauth) return "暂时无法登录，需要部署者先完成配置。";
+  if (m.relogin) return "下一步：<b>登录另一个 MonoCloud 账户</b>，或取消保留当前账户。";
+  if (m.needLogin) return "下一步：<b>登录 MonoCloud 账户</b>。";
+  if (m.a==="unavailable") return "下一步：<b>重新验证账户</b>，或稍后再试。";
+  if (m.a==="connected_empty") return "账户已验证，但没有可用套餐。";
+  if (!m.subOk) return "订阅设置读取失败，请重试。";
+  if (m.unchosen && !m.dirty) return "下一步：<b>确认订阅内容</b>。";
+  if (m.dirty) return "下一步：<b>保存订阅内容</b>。";
+  if (!S.copied) return "下一步：<b>复制订阅链接</b>，导入客户端。";
+  return "下一步：<b>按下面的说明在客户端添加或更新订阅</b>。";
+}
+
+function A(){
+  const m=model();
+  return `<div class="A">
+    <header class="bar"><div class="logo"><i aria-hidden="true"></i>MonoCloud 订阅</div></header>
+    <main>
+      <h1>设置你的代理订阅</h1>
+      <p class="lead" aria-live="polite">${lead(m)}</p>
+      <ol class="steps">${acctStep(m)}${contentStep(m)}${linkStep(m)}${clientStep(m)}</ol>
+      ${S.toast?`<div class="toast" role="status">${S.toast}</div>`:""}
+    </main>
+  </div>`;
+}
+
+function render(){
+  const sc=document.getElementById("screen"), top=sc.scrollTop;
+  sc.innerHTML=A()+`<div class="fold" style="top:${S.view==="mobile"?826:802}px"><span>首屏底线</span></div>`;
+  sc.scrollTop=top;
+  document.getElementById("device").className="device"+(S.view==="mobile"?" mobile":"");
+  document.querySelectorAll(".chrome [data-k]").forEach(b=>b.setAttribute("aria-pressed",S[b.dataset.k]===b.dataset.v));
+}
+let tt;function toast(t){S.toast=t;render();clearTimeout(tt);tt=setTimeout(()=>{S.toast="";render()},2200)}
+
+document.querySelector(".chrome").addEventListener("click",e=>{const b=e.target.closest("[data-k]");if(!b)return;S[b.dataset.k]=b.dataset.v;S.tsChosen=S.chosen!=="no";if(!S.tsChosen){S.tsSaved=false;S.tsDraft=false}Object.assign(S,{relogin:false,copied:false,loggingIn:false,tsSaving:false,tsJustSaved:false,saveTried:false,tsOpen:null,clientOpen:null});document.getElementById("screen").scrollTop=0;render()});
+document.getElementById("device").addEventListener("toggle",e=>{if(e.target.id==="ts-guide")S.tsOpen=e.target.open;if(e.target.id==="c-clashmi")S.clientOpen=e.target.open},true);
+document.getElementById("device").addEventListener("click",e=>{
+  const t=e.target.closest("[data-act]");if(!t)return;
+  const act=t.dataset.act;
+  if(act==="pw"){const i=document.getElementById("pwd");const v=i.type==="password";i.type=v?"text":"password";t.textContent=v?"隐藏":"显示";t.setAttribute("aria-label",v?"隐藏密码":"显示密码");t.setAttribute("aria-pressed",String(v));return}
+  if(act==="copy"){
+    if(S.fault==="copy_err"){S.urlOpen=true;S.copied=true;render();const u=document.getElementById("u");const r=document.createRange();r.selectNodeContents(u);const sl=getSelection();sl.removeAllRanges();sl.addRange(r);return}
+    S.copied=true;return toast("已复制订阅链接");
+  }
+  if(act==="download"){e.preventDefault();S.copied=true}
+  if(act==="relogin")S.relogin=!S.relogin;
+  if(act==="ts"){S.tsDraft=t.dataset.v==="1";S.tsJustSaved=false;S.saveTried=false}
+  if(act==="ts-reset"){S.tsDraft=S.tsSaved;S.saveTried=false}
+  if(act==="ts-save"){S.tsSaving=true;render();setTimeout(()=>{S.tsSaving=false;S.saveTried=true;if(S.fault!=="save_err"){const first=!S.tsChosen;S.tsSaved=S.tsDraft;S.tsChosen=true;S.tsJustSaved=!first}render()},900);return}
+  if(act==="urlopen")S.urlOpen=!S.urlOpen;
+  if(act==="noop")return;
+  render();
+});
+document.getElementById("device").addEventListener("input",e=>{if(e.target.id==="em")S.email=e.target.value});
+document.getElementById("device").addEventListener("submit",e=>{
+  e.preventDefault();S.loggingIn=true;render();
+  setTimeout(()=>{S.loggingIn=false;if(S.fault!=="login_err"){S.acct="connected";S.relogin=false}render()},1100);
+});
+render();
+</script>
+</body>
+</html>
