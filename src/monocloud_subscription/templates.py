@@ -1,7 +1,9 @@
 """Download and verify MonoCloud's official Shadowsocks routing template."""
 
 import hashlib
+import json
 from ipaddress import ip_address
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import httpx
@@ -110,8 +112,32 @@ def fetch_template(http: httpx.Client, settings: MonoCloudSettings) -> dict:
             "Cannot fetch or verify the official MonoCloud template."
         ) from None
 
+    return parse_verified_template(asset.content)
+
+
+def load_template_snapshot(directory: Path) -> dict:
+    """Use an explicitly configured official snapshot; never an implicit fallback."""
     try:
-        text = asset.content.decode("utf-8")
+        manifest = json.loads((directory / "update.json").read_text(encoding="utf-8"))
+        entry = next(
+            item for item in manifest["templates"] if item["name"] == "Clash_ss"
+        )
+        content = (directory / "Clash_ss").read_bytes()
+        if (
+            len(content) != entry["size"]
+            or hashlib.sha256(content).hexdigest() != entry["sha256"]
+        ):
+            raise ValueError
+    except (OSError, ValueError, KeyError, TypeError, StopIteration):
+        raise ValueError(
+            "Cannot read or verify the official template snapshot."
+        ) from None
+    return parse_verified_template(content)
+
+
+def parse_verified_template(content: bytes) -> dict:
+    try:
+        text = content.decode("utf-8")
         for placeholder, value in (
             ("monoCloud_localport", "7890"),
             ("monoCloud_hostname", "example.invalid"),

@@ -1,0 +1,25 @@
+# Copy to .local/container.toml. Mount it read-only at /config/config.toml.
+data_dir = "/data"
+# Optional official snapshot: mount the directory read-only at /templates.
+# template_dir = "/templates"
+
+[monocloud]
+# Supply the client's OAuth credentials privately before browser login.
+# client_id = ""
+# client_secret = ""
+
+[clash]
+mixed_port = 7890
+
+[tailscale]
+enabled = false
+# Client-side settings, unrelated to container paths or networking.
+# hostname = "example-phone"
+# state_dir = "tailscale"
+# routes = ["192.168.50.0/24"]
+
+[server]
+host = "0.0.0.0"
+port = 8080
+# Set a reachable host address when sharing subscriptions with a phone.
+# public_url = "https://subscriptions.example.invalid"

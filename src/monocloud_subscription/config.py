@@ -8,6 +8,14 @@ from urllib.parse import urlsplit
 
 from monocloud_subscription.clash import ClashSettings, TailscaleSettings
 from monocloud_subscription.monocloud import MonoCloudSettings
+from monocloud_subscription.subscription_state import valid_subscription_key
+
+
+@dataclass(frozen=True)
+class ServerSettings:
+    host: str = "127.0.0.1"
+    port: int = 8080
+    public_url: str = ""
 
 
 @dataclass(frozen=True)
@@ -17,6 +25,9 @@ class Config:
     monocloud: MonoCloudSettings = field(default_factory=MonoCloudSettings)
     clash: ClashSettings = field(default_factory=ClashSettings)
     tailscale: TailscaleSettings = field(default_factory=TailscaleSettings)
+    server: ServerSettings = field(default_factory=ServerSettings)
+    subscription_key: str = field(default="", repr=False)
+    template_dir: Path | None = None
 
 
 def load_config(path: Path) -> Config:
@@ -88,8 +99,8 @@ def load_config(path: Path) -> Config:
     clash_values = values.get("clash", {})
     if not isinstance(clash_values, dict):
         raise ValueError("clash must be a TOML table.")
-    port = clash_values.get("mixed_port", 7890)
-    if type(port) is not int or not 1 <= port <= 65535:
+    clash_port = clash_values.get("mixed_port", 7890)
+    if type(clash_port) is not int or not 1 <= clash_port <= 65535:
         raise ValueError("clash.mixed_port must be an integer between 1 and 65535.")
     ts_values = values.get("tailscale", {})
     if not isinstance(ts_values, dict):
@@ -135,10 +146,56 @@ def load_config(path: Path) -> Config:
             "tailscale.routes must be explicit subnet CIDRs, not default routes."
         ) from None
     ts_options["routes"] = tuple(str(network) for network in networks)
+    server = values.get("server", {})
+    if not isinstance(server, dict):
+        raise ValueError("server must be a TOML table.")
+    host = server.get("host", "127.0.0.1")
+    port = server.get("port", 8080)
+    public_url = server.get("public_url", "")
+    if not isinstance(host, str) or not host.strip():
+        raise ValueError("server.host must be a nonempty listen address.")
+    if type(port) is not int or not 1 <= port <= 65535:
+        raise ValueError("server.port must be between 1 and 65535.")
+    try:
+        if not isinstance(public_url, str):
+            raise ValueError
+        if public_url:
+            url = urlsplit(public_url)
+            if (
+                url.scheme not in ("http", "https")
+                or not url.hostname
+                or url.username
+                or url.password
+                or url.query
+                or url.fragment
+                or url.hostname in ("0.0.0.0", "::")
+            ):
+                raise ValueError
+            _ = url.port
+    except ValueError:
+        raise ValueError(
+            "server.public_url must be a reachable HTTP(S) base URL without credentials or query."
+        ) from None
+    subscription = values.get("subscription", {})
+    if not isinstance(subscription, dict):
+        raise ValueError("subscription must be a TOML table.")
+    key = subscription.get("key", "")
+    if key != "" and not valid_subscription_key(key):
+        raise ValueError("subscription.key must contain 32-128 URL-safe characters.")
+    template_dir = values.get("template_dir")
+    if template_dir is not None:
+        if not isinstance(template_dir, str) or not template_dir.strip():
+            raise ValueError("template_dir must be a nonempty directory path.")
+        template_dir = Path(template_dir)
+        if not template_dir.is_absolute():
+            template_dir = path.resolve().parent / template_dir
     return Config(
         data_dir=data_dir,
         token_file=token_path,
         monocloud=api,
-        clash=ClashSettings(port),
+        clash=ClashSettings(clash_port),
         tailscale=TailscaleSettings(**ts_options),
+        server=ServerSettings(host.strip(), port, public_url.rstrip("/")),
+        subscription_key=key,
+        template_dir=template_dir,
     )

@@ -23,10 +23,10 @@ def main(argv: list[str] | None = None) -> int:
         "serve", help="Open the MonoCloud browser login interface."
     )
     web.add_argument(
-        "--host", default="127.0.0.1", help="Listen address (default: loopback only)."
+        "--host", help="Override the configured listen address (default: loopback)."
     )
     web.add_argument(
-        "--port", type=int, default=8080, help="Listen port (default: 8080)."
+        "--port", type=int, help="Override the configured listen port (default: 8080)."
     )
     args = parser.parse_args(argv)
 
@@ -39,7 +39,10 @@ def main(argv: list[str] | None = None) -> int:
 
             from monocloud_subscription.web import create_app
 
-            bind_host = args.host.strip()
+            bind_host = (
+                args.host if args.host is not None else config.server.host
+            ).strip()
+            bind_port = args.port if args.port is not None else config.server.port
             if bind_host.startswith("[") and bind_host.endswith("]"):
                 bind_host = bind_host[1:-1].strip()
             if not bind_host:
@@ -59,10 +62,20 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError(
                     "Set MONOCLOUD_WEB_PASSWORD before binding beyond loopback."
                 )
-            if not 1 <= args.port <= 65535:
+            if not 1 <= bind_port <= 65535:
                 raise ValueError("Port must be between 1 and 65535.")
             host = f"[{bind_host}]" if ":" in bind_host else bind_host
-            print(f"Listen URL: http://{host}:{args.port}", file=sys.stderr)
+            print(f"Listen URL: http://{host}:{bind_port}", file=sys.stderr)
+            if management_password:
+                print(
+                    "Management login — username: admin; password: supplied by the deployer via MONOCLOUD_WEB_PASSWORD. This is separate from the MonoCloud account password.",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    "Management access: loopback only, without a management password. Set MONOCLOUD_WEB_PASSWORD before LAN access.",
+                    file=sys.stderr,
+                )
             if not loopback:
                 print(
                     "WARNING: Remote HTTP does not encrypt account or management credentials. "
@@ -75,7 +88,13 @@ def main(argv: list[str] | None = None) -> int:
                     file=sys.stderr,
                 )
             app = create_app(config, admin_password=management_password)
-            uvicorn.run(app, host=bind_host, port=args.port, access_log=False)
+            uvicorn.run(
+                app,
+                host=bind_host,
+                port=bind_port,
+                access_log=False,
+                timeout_graceful_shutdown=25,
+            )
             return 0
         if args.command == "check":
             print(f"Configuration OK. Data directory: {config.data_dir}")

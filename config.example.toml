@@ -2,6 +2,10 @@
 # Copy this file to .local/config.toml to keep private settings out of Git.
 data_dir = "data"
 
+# Optional explicit official template snapshot (no automatic fallback/refresh).
+# Directory must contain update.json and Clash_ss; size/SHA-256 are still checked.
+# template_dir = "official-template"
+
 # Optional override; otherwise the token is stored at data_dir/token.json.
 # token_file = "credentials/token.json"
 
@@ -27,3 +31,14 @@ enabled = false
 # auth_key = ""          # Optional; otherwise the core logs an authorization URL.
 # control_url = "https://controlplane.tailscale.com"
 # routes = ["192.168.50.0/24"] # Optional explicit Tailnet subnet routes.
+
+[server]
+host = "127.0.0.1"
+port = 8080
+# For phones, use a reachable LAN hostname/IP or your HTTPS reverse proxy URL.
+# public_url = "https://subscriptions.example.invalid"
+
+[subscription]
+# Optional private override; otherwise a random key is generated and persisted.
+# Use a cryptographically random URL-safe value, 32-128 characters.
+# key = ""

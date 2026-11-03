@@ -1,22 +1,47 @@
 # Clash/mihomo verification
 
-## Reproducible checks (2026-11-02)
+## Device acceptance completed (2026-11-02–03)
+
+The user tested **Clash Mi 1.0.31.1703 on iPhone** within the controlled home LAN.
+The app's actual bundled core version was not independently read from its About
+screen; the separately tested desktop core is identified below.
+
+| Scenario | Result and evidence |
+| --- | --- |
+| MonoCloud only | User confirmed protected URL import, google.com and baidu.com access, manual node switching, and subscription refresh with continued access. No Tailscale authorization was required. |
+| MonoCloud + Tailscale | User confirmed both public sites remain accessible while Tailnet access is enabled. |
+| Tailnet access and DNS | User confirmed the existing HTTP service is reachable by Tailnet IPv4 and full Tailnet FQDN. The management authentication dialog/page is the expected response. |
+| Authorization | Completed in the browser using the URL obtained from Core Logs → More → Copy. No automatic authorization prompt appeared in this test. |
+| State persistence | User disconnected, exited/reopened the app, reconnected, then updated the same subscription and reconnected again. Access remained normal without new authorization. Read-only Tailnet status confirmed the original device ID, unchanged peer count and an online peer. |
+
+Original logs, authorization URLs, device IDs, actual private endpoints and
+credentials are not included here. These results satisfy the device workflow
+acceptance moved from #3 into #4. They do not establish IPv6 reachability, advertised
+subnet routing, sleep recovery, network transitions or updates outside the home
+network; those were not tested. The subscription server distributes configuration,
+while the generated SS outbounds target MonoCloud nodes directly and Tailscale
+runs inside the client. It is not a phone traffic relay.
+
+## Core and service verification
 
 - Official asset: `https://static.monocloud.co/mono_go/Clash_ss`.
 - Manifest: `https://static.monocloud.co/mono_go/update.json`.
 - Exact-byte size: 243529; SHA-256:
   `9e4edb4a7907e4ae6bd8b87f56e8c4fd283243a6c9f4c782377e821ba4a6351c`.
-- Official rule count: 7486. The renderer preserves their relative order and
-  contents, including the final `GEOIP,CN,DIRECT` and `MATCH,Proxy` rules.
-- Test core: official `MetaCubeX/mihomo` release **v1.19.32**, darwin arm64,
-  Go 1.26.8, build timestamp 2026-09-30; binary reports `with_gvisor`.
-- GEOIP dependency: official `MetaCubeX/meta-rules-dat` release `latest`,
-  `geoip.metadb`, supplied as the core's `Country.mmdb`. Without this data the
-  check attempted a download and failed in the sandbox; no rule was removed.
-- Both sanitized variants passed with a constructed AES-128-GCM node at
-  `192.0.2.1`, port 443, and a fake password. The enabled variant had no auth key.
+- Official rule count: 7486, preserved in order and content, including the final
+  `GEOIP,CN,DIRECT` and `MATCH,Proxy` rules.
+- Desktop core: official `MetaCubeX/mihomo` **v1.19.32**, darwin arm64, Go 1.26.8,
+  build timestamp 2026-09-30, tags `with_gvisor`.
+- GEOIP: official `MetaCubeX/meta-rules-dat` release `latest`, `geoip.metadb`,
+  supplied as `Country.mmdb`. No GEOIP rule was removed to make validation pass.
+- Both sanitized modes passed with a constructed AES-128-GCM node at `192.0.2.1`,
+  port 443, and fake credentials. Both private real-node outputs also passed.
+- Real protected HTTP downloads in both modes were validated with saved-account
+  discovery and the verified official snapshot, followed by core checks.
+- Constructed-data browser checks verified copy, YAML download, toggle save/reload
+  and a 390px layout with no horizontal overflow.
 
-Use the release's binary appropriate for your platform, then run:
+Run the release binary appropriate for the test platform:
 
 ```sh
 mihomo -v
@@ -24,36 +49,76 @@ mihomo -t -d <private-core-data-directory> -f <private-proxy-only.yaml>
 mihomo -t -d <private-core-data-directory> -f <private-tailscale.yaml>
 ```
 
-These are parser/configuration checks, not network or authorization checks. The
-core binary, GEOIP data, official template copy and generated files are test
-artifacts in ignored local storage; they are not bundled with the application.
-Normal deployments fetch official assets using the configured MonoCloud
-User-Agent. This development machine received HTTP 403 both via its proxy and
-directly; the official bytes above were fetched through an authorized read-only
-workstation request and reverified locally. No automatic fallback or remote
-workstation dependency is built into the generator.
+The binary, GEOIP data, template copies, runtime state and generated files remain
+in ignored local storage. The application does not bundle private data or these
+test artifacts. Core parsing and constructed browser tests are distinct from the
+user-confirmed phone results above.
 
-Real-node private outputs were also generated from read-only discovery with the
-saved browser-login token and the verified official bytes above. Both passed the
-same core check; no node identities or credentials are included in this record.
+The development machine receives a Cloudflare challenge from the official asset
+host. Test bytes were obtained through an authorized read-only workstation request
+and reverified locally. The explicit `template_dir` configuration supports that
+operator-provided official snapshot, with size/SHA-256 checks intact. There is no
+implicit fallback, workstation dependency or claim of automatic snapshot freshness.
+Normal HTTPS downloads still require access to the official asset host.
 
-Review regressions cover redirect rejection on both downloads, unsupported
-top-level options/modes, malformed DNS mutation fields, and preservation of
-existing IP-based bootstrap DNS. The template still passes those constraints.
+## Startup issues found and resolved
 
-## Clash Mi acceptance still required
+**Proxy-backed UDP binding.** Device logs showed Tailnet rules matching followed
+by `tsnet: wgengine: magicsock: Rebind IPv4 failed: failed to bind any ports (tried
+[0])`, before login. A local two-variant reproduction with the official desktop
+core and a constructed SS node reproduced the UDP and empty-target resolution
+errors only with `dialer-proxy: Proxy`. Removing that field eliminated the errors
+and produced a login hint. The generator now leaves Tailscale's underlying dialer
+direct; the phone subsequently completed authorization and Tailnet access. The
+client network must permit Tailscale control/DERP/STUN and peer connections.
+See [upstream #3142](https://github.com/MetaCubeX/mihomo/issues/3142).
 
-| Scenario | Required result | Status |
-| --- | --- | --- |
-| MonoCloud only | Import, proxy access, manual node selection and ordinary DNS | Not verified on device |
-| MonoCloud + Tailscale | Same proxy/selection/DNS behavior | Not verified on device |
-| Tailnet access | Tailnet FQDN, IPv4 and IPv6 access; explicit advertised subnet if configured | Not verified on device |
-| Authorization | Login URL exposed by the client or private auth-key provisioning | Not verified on device |
-| Persistence | Same Tailnet identity and connectivity after restart using the same client state directory | Not verified on device |
+**Authorization visibility.** mihomo sends tsnet user messages to its info logger.
+For enabled, unkeyed Tailscale, the renderer raises hidden warning/error/silent
+logging to info. Clash Mi also has its own core log-level override, default error;
+select info there for first-time login. Core Logs displays plain text, but its
+More menu supports full-text copy and file sharing. Copy into a private note,
+find `login.tailscale.com`, and open only that URL. Keep the VPN connected until
+browser authorization completes and Tailnet access works; then test restart.
+No auth-key UI or automatic browser-launch feature was added. See the tagged
+[log viewer source](https://github.com/KaringX/clashmi/blob/v1.0.31.1703/lib/screens/richtext_viewer.screen.dart).
 
-Record the actual Clash Mi app/core versions with those results. A core `-t`
-check, community report or sing-box test cannot substitute for this matrix.
-Tailscale initializes lazily on first use; allow time for initial authorization.
-Full `*.ts.net` names are configured; bare short names are not. Ensure the app
-permits state writes and retains that directory when updating/importing profiles.
-No claim is made yet about sleep recovery or network transitions.
+**LAN firewall.** The initial reset was traced to macOS Firewall blocking the exact
+Python executable. Checking its app bundle alone missed that rule. After the user
+allowed incoming connections, local and LAN-peer HTTP probes returned the expected
+management 401. The phone also needed to join Wi-Fi. No remote configuration was
+changed; only the user-authorized local Python incoming rule was allowed.
+
+## Approved usability and plan-selection follow-up (2026-11-03)
+
+Items 1, 2, 3 and 5 were approved before implementation. Startup/docs now identify
+management credential setup without revealing the password; verified account state
+controls a collapsible reconnect/switch-account form. The page embeds a separate
+Clash Mi guide resource with base steps plus an optional Tailscale section. No
+Surge/sing-box guide implementation, auth-key UI or AI routing policy was added.
+
+The renderer now uses manual `Proxy → service/plan → node` groups. Constructed
+cases cover distinct and duplicate plan names, reserved-name collisions, empty
+services, missing metadata and all-node inclusion. Actual saved-account downloads
+in both modes retained all available nodes under their matching services and
+passed mihomo v1.19.32 checks. The official public rule sequence is unchanged.
+One old flat-group node choice may reset at the first update; choose a plan/node
+again. The user subsequently confirmed the new phone hierarchy: both plans and their
+nodes can be selected, website access remains normal, and the existing Tailnet
+connection remains usable without new authorization. The grouping follow-up is
+therefore device-verified in addition to the original workflow acceptance.
+
+Constructed-data browser QA confirmed connected forms collapse, explicit reconnect
+opens the form, sign-out/expired credentials expand it, and upstream outages retain
+saved credentials without requesting a password retry. Login clears the password.
+The mobile guide's base/overlay details expand without horizontal overflow at
+390px. Wheel/sdist privacy checks pass and the bundled guide is included.
+
+## Account API evidence
+
+Static client inspection confirmed the password-grant form and OAuth credential
+source. Read-only requests confirmed the service/node endpoints, array structures,
+field types and request identity. Constructed-data integration tests cover login,
+token persistence, discovery and rejection; actual browser login and saved-token
+reuse were also verified. OAuth client credentials remain private and unbundled.
+This implementation evidence belongs here rather than in first-start instructions.
