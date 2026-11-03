@@ -1,5 +1,8 @@
 # Private research and machine-specific local files.
 /.local/
+/.env
+/data/
+/compose.override.yaml
 
 # Python environments, caches, and build output.
 /.venv/

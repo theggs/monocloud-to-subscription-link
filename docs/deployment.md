@@ -49,6 +49,10 @@ Keep those environment overrides on subsequent Compose commands; `PORT` can also
 change the published host port. The internal listen address remains `0.0.0.0:8080`.
 Use the actual published port in `public_url`. For HTTPS deployment, publish to
 the reverse proxy as appropriate and follow the transport section below.
+For persistent settings, copy `deploy/compose.env.example` to the project-root
+`.env` and edit it instead of repeating shell overrides. Compose reads `.env`
+for interpolation; `.local/service.env` separately supplies the management
+password to the service. Both private locations are ignored by Git.
 
 ```sh
 docker compose logs --tail=50 subscription
@@ -101,6 +105,82 @@ test volume afterward; it never uses your `.local` credentials or running servic
 It replaces the upstream login with a 12-second fake response to verify that
 an active request can complete during a normal Compose stop, then recreates the
 container to check persisted state.
+Add `--bind-data` to verify a host-directory mount using your current non-root
+UID/GID instead of the default named volume.
+
+### NAS: keep the deployment under ~/docker/
+
+Place the application checkout or release files in
+`~/docker/monocloud-to-subscription-link/`. Keep that directory private; create
+the configuration and service environment file as above. To keep runtime data
+beside Compose, use a bind directory with the NAS account's UID/GID:
+
+```sh
+cd ~/docker/monocloud-to-subscription-link
+mkdir -p data .local
+chmod 700 data .local
+cp deploy/compose.env.example .env
+id -u
+id -g
+```
+
+Set the following in `.env`, replacing the example UID/GID with the values
+printed by `id`:
+
+```dotenv
+BIND_ADDRESS=0.0.0.0
+PORT=8080
+DATA_DIR=./data
+APP_UID=1000
+APP_GID=1000
+```
+
+Set `server.public_url` in `.local/container.toml` to the NAS address and
+published port reachable by your clients. The application still uses `/data`
+inside the container. The service runs as the configured non-root UID/GID;
+using the directory owner's IDs avoids changing unrelated NAS permissions.
+With that matching owner, the mounted TOML can use mode `600` as well.
+Only override UID/GID alongside an appropriately owned bind directory; the
+default named volume is initialized for UID/GID 10001.
+
+```sh
+chmod 600 .env .local/container.toml .local/service.env
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
+```
+
+On NAS systems where SSH's PATH omits the installed Docker CLI, add its actual
+installation directory to PATH for the session (for example `/usr/local/bin` on
+Synology). Do not change the Docker daemon or unrelated applications.
+
+If an official-template snapshot is needed, keep it in `.local/templates/`, set
+`template_dir = "/templates"` in the TOML, and create a private
+`compose.override.yaml` alongside Compose:
+
+```yaml
+services:
+  subscription:
+    volumes:
+      - type: bind
+        source: ./.local/templates
+        target: /templates
+        read_only: true
+        bind:
+          create_host_path: false
+```
+
+Compose automatically loads that override. Include only the verified official
+`update.json` and `Clash_ss` files; checks and operator refresh responsibilities
+remain unchanged. This override file is ignored by Git.
+
+Back up `data/`, `.local/` and `.env` privately. Update source/release files without
+overwriting those paths, then run `docker compose up -d --build`. An image built
+elsewhere must match the NAS architecture; transfer it with `docker save` /
+`docker load` and use `docker compose up -d --no-build`. For migrations, copy the
+saved token and subscription state into `data/` before the first start. Moving
+hosts changes the subscription base URL: clients need the new reachable URL,
+even when its secret path and Tailscale settings are preserved.
 
 ## Management credentials
 
