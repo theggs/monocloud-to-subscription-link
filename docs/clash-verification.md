@@ -103,8 +103,10 @@ services, missing metadata and all-node inclusion. Actual saved-account download
 in both modes retained all available nodes under their matching services and
 passed mihomo v1.19.32 checks. The official public rule sequence is unchanged.
 One old flat-group node choice may reset at the first update; choose a plan/node
-again. The new phone grouping UI has not yet been revalidated by the user; earlier
-phone acceptance above applies to the preceding flat selection layout.
+again. The user subsequently confirmed the new phone hierarchy: both plans and their
+nodes can be selected, website access remains normal, and the existing Tailnet
+connection remains usable without new authorization. The grouping follow-up is
+therefore device-verified in addition to the original workflow acceptance.
 
 Constructed-data browser QA confirmed connected forms collapse, explicit reconnect
 opens the form, sign-out/expired credentials expand it, and upstream outages retain

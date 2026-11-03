@@ -31,5 +31,5 @@ the configured management password. Guide is basic access plus optional overlay.
 Validation: 100 unittest tests passed; Ruff and build passed. Constructed browser
 QA covered connected/relogin/signed-out/expired/unavailable states and mobile guide
 layout. Both sanitized and actual HTTP two-mode configurations passed core checks;
-actual plan/node membership matched API data. New phone hierarchy remains a distinct
-user revalidation item, not an inherited acceptance claim.
+actual plan/node membership matched API data. The user separately confirmed the new phone hierarchy: both plans and nodes
+can be switched, access works, and Tailnet remains usable without reauthorization.
