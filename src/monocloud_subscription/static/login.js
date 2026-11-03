@@ -96,7 +96,9 @@ function renderAccount(m) {
     meta = "请检查服务是否运行，然后重试。";
   } else if (state.relogin) {
     title = "切换 MonoCloud 账户";
-    meta = "登录成功后替换当前账户；取消或失败时保留原账户。";
+    meta = state.loggingIn
+      ? "正在登录新账户，请等待结果；处理期间无法取消。"
+      : "登录成功后替换当前账户；取消或失败时保留原账户。";
   } else if (m.account === "signed_out") {
     title = "登录 MonoCloud 账户";
     meta = "使用你的 MonoCloud 邮箱和密码。";
@@ -140,6 +142,7 @@ function renderAccount(m) {
 
   loginForm.setAttribute("aria-busy", String(state.loggingIn));
   for (const control of [email, password, passwordToggle, loginSubmit]) control.disabled = state.loggingIn;
+  $("login-cancel").disabled = state.loggingIn;
   if (!m.oauth) loginSubmit.disabled = true;
   $("login-label").textContent = state.loggingIn ? "正在登录…" : "登录";
   $("login-feedback").textContent = state.loginError;
@@ -225,7 +228,9 @@ function renderClient(m, stepValue) {
 function nextStep(m) {
   if (m.account === "checking") return "正在检查账户…";
   if (m.account === "unreachable") return "暂时无法读取服务状态，请重试。";
-  if (state.relogin) return "下一步：<b>登录另一个 MonoCloud 账户</b>，或取消保留当前账户。";
+  if (state.relogin) return state.loggingIn
+    ? "正在登录另一个 MonoCloud 账户，请等待结果；处理期间无法取消。"
+    : "下一步：<b>登录另一个 MonoCloud 账户</b>，或取消保留当前账户。";
   if (m.needLogin && !m.oauth) return "暂时无法登录，需要部署者先完成配置。";
   if (m.needLogin) return "下一步：<b>登录 MonoCloud 账户</b>。";
   if (m.account === "unavailable") return "下一步：<b>重新验证账户</b>，或稍后再试。";
@@ -307,6 +312,7 @@ $("account-switch").addEventListener("click", () => {
 });
 
 $("login-cancel").addEventListener("click", () => {
+  if (state.loggingIn) return;
   state.relogin = false;
   state.loginError = "";
   render();
