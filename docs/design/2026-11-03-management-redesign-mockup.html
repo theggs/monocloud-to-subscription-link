@@ -103,6 +103,7 @@ button{font:inherit;cursor:pointer;color:inherit}input{font:inherit}
 .A .gl{list-style:none;padding:0;margin:0;counter-reset:g}
 .A .gl>li{counter-increment:g;position:relative;padding:0 0 10px 30px;font-size:12.5px;line-height:1.7;color:var(--sub)}
 .A .gl>li:before{content:counter(g);position:absolute;left:0;top:1px;width:20px;height:20px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:650;display:grid;place-items:center}
+.A .guide-notes>li:before{content:"–";background:transparent;color:var(--sub)}
 .A .gl>li b{color:var(--ink);font-weight:600}
 .A details.ext{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:0 12px;background:#fbfbfc}
 .A details.ext>summary{cursor:pointer;padding:10px 0;font-size:13px;font-weight:600;display:flex;justify-content:space-between;gap:8px}
@@ -291,8 +292,10 @@ function clientStep(m){
       <li><b>添加订阅。</b>复制本页链接，在 Clash Mi 的“我的配置 → + → 添加配置链接”中粘贴并保存，选中该配置。</li>
       <li><b>选择套餐和节点。</b>使用规则模式；在 Proxy 组选择套餐，再在对应套餐组选择节点。${planTxt}GLOBAL 对应全局模式，日常分流使用规则模式。</li>
       <li><b>连接并验证。</b>开启连接，按系统提示允许 VPN，确认常用国内外网站能访问。切换节点仍在对应套餐组操作。</li>
-      <li><b>更新配置。</b>在 Clash Mi 手动更新同一订阅，重新连接。链接保持不变；首次升级到套餐分组时，请重新选择一次套餐和节点。</li>
     </ol>
+    <ul class="gl guide-notes">
+      <li><b>更新配置。</b>在 Clash Mi 手动更新同一订阅，重新连接。链接保持不变；首次升级到套餐分组时，请重新选择一次套餐和节点。</li>
+    </ul>
     <details class="ext" id="ts-guide" ${tsOpen?"open":""}><summary>可选：增加 Tailscale 能力<small>在原配置上叠加</small></summary>
       <ol class="gl">
         <li><b>开启并更新。</b>在本页“订阅内容”选择“代理 + Tailscale”并保存，然后在 Clash Mi 更新原订阅、重新连接，不需要另建配置或更换链接。</li>
