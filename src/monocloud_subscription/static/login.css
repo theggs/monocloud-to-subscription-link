@@ -107,7 +107,7 @@ details.client[open]>summary .client-quick{display:none}
 .guide-steps{list-style:none;padding:0;margin:0;counter-reset:g}
 .guide-steps>li{counter-increment:g;position:relative;padding:0 0 10px 30px;font-size:12.5px;line-height:1.7;color:var(--sub);overflow-wrap:anywhere}
 .guide-steps>li:before{content:counter(g);position:absolute;left:0;top:1px;width:20px;height:20px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:650;display:grid;place-items:center}
-.guide-notes>li:before{content:"–";background:transparent;color:var(--sub)}
+.guide-notes>li:before{content:"↻";font-size:14px}
 .guide-steps b{color:var(--ink);font-weight:600}
 details.guide-extension{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:0 12px;background:#fbfbfc}
 details.guide-extension>summary{cursor:pointer;padding:10px 0;font-size:13px;font-weight:600;display:flex;justify-content:space-between;gap:8px}
