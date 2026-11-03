@@ -52,7 +52,12 @@ class CliTests(unittest.TestCase):
             )
         self.assertEqual(
             run.call_args.kwargs,
-            {"host": "127.0.0.1", "port": 8081, "access_log": False},
+            {
+                "host": "127.0.0.1",
+                "port": 8081,
+                "access_log": False,
+                "timeout_graceful_shutdown": 25,
+            },
         )
 
     def test_remote_binding_warns_about_plaintext_credentials(self):

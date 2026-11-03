@@ -47,13 +47,13 @@ toggle.addEventListener("click", () => {
 async function loadStatus() {
   let state = null;
   try {
-    const response = await fetch("/api/status?verify=true", { cache: "no-store" });
+    const response = await fetch("api/status?verify=true", { cache: "no-store" });
     if (!response.ok) throw new Error("status unavailable");
     const status = await response.json();
     configured = status.oauth_configured;
     showAccount(status);
     state = status.account_state;
-    if (!configured && !status.token_saved) message("当前服务尚未配置登录参数，请联系部署者完成配置。", "error");
+    if (!configured) message("当前服务尚未配置登录参数，请联系部署者完成配置。", "error");
   } catch {
     accountPanel.open = true;
     connectionTitle.textContent = "暂时无法读取服务状态";
@@ -73,7 +73,7 @@ form.addEventListener("submit", async (event) => {
   submitLabel.textContent = "正在验证…";
   for (const control of [email, password, toggle, submit]) control.disabled = true;
   try {
-    const response = await fetch("/api/login", {
+    const response = await fetch("api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -152,7 +152,7 @@ function showSubscription(details) {
 
 async function loadSubscription() {
   try {
-    const response = await fetch("/api/subscription", { cache: "no-store" });
+    const response = await fetch("api/subscription", { cache: "no-store" });
     if (!response.ok) throw new Error("subscription unavailable");
     showSubscription(await response.json());
   } catch {
@@ -184,7 +184,7 @@ subscriptionForm.addEventListener("submit", async (event) => {
   tailscaleEnabled.disabled = true;
   saveSubscription.disabled = true;
   try {
-    const response = await fetch("/api/subscription", {
+    const response = await fetch("api/subscription", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tailscale_enabled: tailscaleEnabled.checked }), cache: "no-store",
     });

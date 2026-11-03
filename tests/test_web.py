@@ -1,8 +1,10 @@
 import tempfile
 import unittest
 from dataclasses import replace
+from html.parser import HTMLParser
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -55,6 +57,30 @@ class LoginPageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await client.get("/assets/login.css")).status_code, 200)
         self.assertEqual((await client.get("/assets/login.js")).status_code, 200)
         self.assertEqual(page.headers["cache-control"], "no-store")
+
+    async def test_page_assets_resolve_inside_reverse_proxy_mount(self):
+        class Assets(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.urls = []
+
+            def handle_starttag(self, tag, attributes):
+                attributes = dict(attributes)
+                if tag == "script":
+                    self.urls.append(attributes["src"])
+                elif tag == "link":
+                    self.urls.append(attributes["href"])
+
+        client = self.client()
+        assets = Assets()
+        assets.feed((await client.get("/")).text)
+        for url in assets.urls:
+            external = urlsplit(urljoin("https://example.invalid/mono/", url)).path
+            self.assertTrue(external.startswith("/mono/"), external)
+            # A strip-prefix reverse proxy forwards this path to the application.
+            self.assertEqual(
+                (await client.get(external.removeprefix("/mono"))).status_code, 200
+            )
 
     async def test_login_saves_only_token_and_returns_no_secrets(self):
         response = await self.client().post(

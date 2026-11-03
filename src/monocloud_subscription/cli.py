@@ -88,7 +88,13 @@ def main(argv: list[str] | None = None) -> int:
                     file=sys.stderr,
                 )
             app = create_app(config, admin_password=management_password)
-            uvicorn.run(app, host=bind_host, port=bind_port, access_log=False)
+            uvicorn.run(
+                app,
+                host=bind_host,
+                port=bind_port,
+                access_log=False,
+                timeout_graceful_shutdown=25,
+            )
             return 0
         if args.command == "check":
             print(f"Configuration OK. Data directory: {config.data_dir}")

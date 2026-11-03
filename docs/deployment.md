@@ -71,7 +71,10 @@ into the volume and set ownership to `10001:10001` before starting the container
 Stop any existing listener on the same host port before switching deployments.
 
 The image runs as UID/GID `10001:10001`, with one Uvicorn process receiving stop
-signals directly. It needs no privileged mode, TUN device, or server-side
+signals directly. Uvicorn allows active requests up to 25 seconds to finish before
+cancelling them; Compose waits 35 seconds before force-killing the container.
+This is a bounded shutdown, not a guarantee that every long subscription generation
+finishes. It needs no privileged mode, TUN device, or server-side
 Tailscale daemon. Client `tailscale.state_dir` remains a client-side path.
 For an explicit official template snapshot, add a read-only directory mount at
 `/templates`, make its files readable by UID 10001, and enable the example's
@@ -95,6 +98,9 @@ uv run --locked python scripts/check_container.py
 
 The check creates its own randomly named Compose project and deletes only its
 test volume afterward; it never uses your `.local` credentials or running service.
+It replaces the upstream login with a 12-second fake response to verify that
+an active request can complete during a normal Compose stop, then recreates the
+container to check persisted state.
 
 ## Management credentials
 
@@ -114,8 +120,12 @@ Startup identifies the management username and variable name without printing th
 password. Someone opening the management page must obtain that password from the
 deployer; the MonoCloud account password will not unlock its browser prompt.
 
-With no management password configured, access is limited to loopback. Binding
-beyond loopback requires the password. Native client subscription downloads use
+With no management password configured, use direct loopback access only. Binding
+beyond loopback requires the password. **Always set `MONOCLOUD_WEB_PASSWORD` when
+using a reverse proxy or tunnel, even if the application listens on loopback.**
+A local proxy can make external requests appear local; the Host-header check
+does not protect an unauthenticated backend behind such a proxy.
+Native client subscription downloads use
 the secret URL path, independently of management Basic auth.
 
 ## Listen address and client URL
@@ -134,7 +144,10 @@ Replace the example IP with your server's reachable address. The bind wildcard
 is not a browser address. `public_url` is the base URL shown in subscription links;
 without it, links use the management browser's origin. A phone cannot reach a
 loopback URL belonging to the server. A reverse-proxy URL may include a mount
-prefix if the proxy routes it appropriately.
+prefix, for example `https://example.com/mono`. Configure the proxy to redirect
+`/mono` to `/mono/`, strip `/mono` when forwarding requests, and route the entire
+`/mono/` subtree to this service. Page assets and API calls resolve relative to
+that trailing-slash page URL. Subscription URLs use the configured `public_url`.
 
 The phone must be able to reach the address and port when importing/updating. For
 LAN deployment, confirm Wi-Fi connectivity and firewall permission for the exact
@@ -151,6 +164,7 @@ networks. TLS termination remains a deployment choice.
 
 When using an HTTPS reverse proxy:
 
+- Set `MONOCLOUD_WEB_PASSWORD` on the backend regardless of its bind address.
 - Forward the original `Host` and set `X-Forwarded-Proto`.
 - Uvicorn trusts forwarded headers from loopback by default. For a proxy elsewhere,
   set `FORWARDED_ALLOW_IPS` to its specific trusted address; do not trust arbitrary
