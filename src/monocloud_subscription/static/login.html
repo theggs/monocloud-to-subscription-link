@@ -11,18 +11,18 @@
 </head>
 <body>
   <header class="masthead">
-    <a class="brand" href="/" aria-label="MonoCloud 账户连接首页">
+    <a class="brand" href="/" aria-label="MonoCloud 订阅管理首页">
       <svg viewBox="0 0 36 36" aria-hidden="true"><path d="M6 25V11l12 10 12-10v14M6 18l12 10 12-10"/></svg>
-      <span>MonoCloud<span class="brand-separator">/</span><span class="brand-context">账户连接</span></span>
+      <span>MonoCloud<span class="brand-separator">/</span><span class="brand-context">订阅管理</span></span>
     </a>
     <span class="service-mark"><span></span>本地管理</span>
   </header>
 
   <main class="layout">
     <section class="intro" aria-labelledby="page-title">
-      <p class="eyebrow">ACCOUNT ACCESS <span>01</span></p>
-      <h1 id="page-title">从这里，<br>连接 <em>MonoCloud.</em></h1>
-      <p class="description">使用你的 MonoCloud 账户登录。<br>连接所需的凭据将保存在当前服务中。</p>
+      <p class="eyebrow">SUBSCRIPTION ACCESS <span>01</span></p>
+      <h1 id="page-title">配置一次，<br>连接你的<em>设备。</em></h1>
+      <p class="description">连接 MonoCloud，获取你的客户端订阅。<br>需要访问 Tailnet 时，再开启 Tailscale。</p>
       <div class="connection" id="connection" data-state="checking">
         <span class="connection-dot" aria-hidden="true"></span>
         <div><p id="connection-title">正在检查连接</p><p id="connection-detail">读取当前服务的登录状态…</p></div>
@@ -31,7 +31,27 @@
     </section>
 
     <div class="account-column">
-    <section class="login-card" aria-labelledby="form-title">
+
+    <section class="login-card subscription-card" aria-labelledby="subscription-title">
+      <div class="card-heading"><span class="card-kicker">客户端订阅</span><span class="card-symbol" aria-hidden="true">↗</span></div>
+      <h2 id="subscription-title">带到你的设备</h2>
+      <p class="card-description">将链接添加到 Clash Mi，即可导入和更新配置。代理流量由设备直接连接节点。</p>
+      <label for="subscription-url">Clash / mihomo 订阅链接</label>
+      <textarea id="subscription-url" class="url-field" readonly rows="3" spellcheck="false" aria-describedby="link-note" placeholder="正在读取订阅链接…"></textarea>
+      <a class="guide-link" href="#client-guides">查看手机接入指南 ↓</a>
+      <div class="link-actions"><button id="copy-subscription" class="secondary" type="button" disabled>复制链接</button><a id="download-subscription" class="secondary" aria-disabled="true">下载配置 <span aria-hidden="true">↓</span></a></div>
+      <p id="link-note" class="subscription-note">链接含访问凭据，请只在自己的设备上使用。</p>
+      <form id="subscription-form" aria-busy="false">
+        <label class="toggle-label" for="tailscale-enabled"><input id="tailscale-enabled" type="checkbox" disabled><span>启用 Tailscale</span><span id="subscription-mode" class="mode-label">仅 MonoCloud</span></label>
+        <p class="subscription-note">可选。开启后可访问 Tailnet；首次使用需在客户端授权。保存后，请在 Clash Mi 更新订阅。</p>
+        <button id="save-subscription" class="submit" type="submit" disabled><span>保存设置</span><span aria-hidden="true">→</span></button>
+      </form>
+      <div id="subscription-feedback" class="feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+    </section>
+    <section class="login-card account-card" aria-label="MonoCloud 账户设置">
+      <details id="account-panel" class="account-panel">
+      <summary id="account-action">登录 MonoCloud</summary>
+      <div class="account-form-content">
       <div class="card-heading"><span class="card-kicker">连接账户</span><span class="card-symbol" aria-hidden="true">↗</span></div>
       <h2 id="form-title">登录 MonoCloud</h2>
       <p class="card-description">输入你的账户邮箱与密码。</p>
@@ -51,25 +71,13 @@
         <p class="form-note">登录成功后，当前服务会记住连接凭据。</p>
       </form>
       <noscript><p class="feedback" data-kind="error">请启用 JavaScript 后使用此登录页面。</p></noscript>
+      </div>
+      </details>
     </section>
 
-    <section class="login-card subscription-card" aria-labelledby="subscription-title">
-      <div class="card-heading"><span class="card-kicker">客户端订阅</span><span class="card-symbol" aria-hidden="true">↗</span></div>
-      <h2 id="subscription-title">带到你的设备</h2>
-      <p class="card-description">将链接添加到 Clash Mi，即可导入和更新配置。代理流量由设备直接连接节点。</p>
-      <label for="subscription-url">Clash / mihomo 订阅链接</label>
-      <textarea id="subscription-url" class="url-field" readonly rows="3" spellcheck="false" aria-describedby="link-note" placeholder="正在读取订阅链接…"></textarea>
-      <div class="link-actions"><button id="copy-subscription" class="secondary" type="button" disabled>复制链接</button><a id="download-subscription" class="secondary" aria-disabled="true">下载配置 <span aria-hidden="true">↓</span></a></div>
-      <p id="link-note" class="subscription-note">链接含访问凭据，请只在自己的设备上使用。</p>
-      <form id="subscription-form" aria-busy="false">
-        <label class="toggle-label" for="tailscale-enabled"><input id="tailscale-enabled" type="checkbox" disabled><span>启用 Tailscale</span><span id="subscription-mode" class="mode-label">仅 MonoCloud</span></label>
-        <p class="subscription-note">可选。开启后可访问 Tailnet；首次使用需在客户端授权。保存后，请在 Clash Mi 更新订阅。</p>
-        <button id="save-subscription" class="submit" type="submit" disabled><span>保存设置</span><span aria-hidden="true">→</span></button>
-      </form>
-      <div id="subscription-feedback" class="feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
-    </section>
+    <!-- CLIENT_GUIDES -->
     </div>
   </main>
-  <footer><span>MonoCloud 账户连接</span><span>简单连接，私密保存。</span></footer>
+  <footer><span>MonoCloud 订阅管理</span><span>简单连接，私密保存。</span></footer>
 </body>
 </html>

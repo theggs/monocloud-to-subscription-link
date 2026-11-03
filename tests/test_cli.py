@@ -169,3 +169,19 @@ class CliTests(unittest.TestCase):
                 )
             self.assertEqual(run.call_args.kwargs["host"], host)
             self.assertEqual(run.call_args.kwargs["port"], port)
+
+    def test_startup_explains_management_credential_source_without_password(self):
+        self.path.write_text('data_dir = "data"')
+        output = io.StringIO()
+        with (
+            patch.dict(
+                os.environ, {"MONOCLOUD_WEB_PASSWORD": "constructed-private-password"}
+            ),
+            patch("uvicorn.run"),
+            redirect_stderr(output),
+        ):
+            main(["--config", str(self.path), "serve"])
+        text = output.getvalue()
+        self.assertIn("username: admin", text)
+        self.assertIn("MONOCLOUD_WEB_PASSWORD", text)
+        self.assertNotIn("constructed-private-password", text)

@@ -69,6 +69,13 @@ class SubscriptionTests(unittest.TestCase):
             with httpx.Client(transport=httpx.MockTransport(handle)) as http:
                 result = yaml.safe_load(generate_subscription(config, http))
             self.assertEqual(len(result["proxies"]), 2)
+            self.assertEqual(
+                result["proxy-groups"][0]["proxies"], ["Example", "Example (2)"]
+            )
+            self.assertEqual(
+                [len(group["proxies"]) for group in result["proxy-groups"][1:]], [1, 1]
+            )
+            self.assertEqual(seen.count("/api/service"), 1)
             self.assertEqual(before, config.token_file.read_bytes())
             self.assertIn("/api/shadowsocks/1", seen)
             self.assertIn("/api/shadowsocks/2", seen)

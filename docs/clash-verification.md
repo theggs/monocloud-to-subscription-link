@@ -88,3 +88,26 @@ Python executable. Checking its app bundle alone missed that rule. After the use
 allowed incoming connections, local and LAN-peer HTTP probes returned the expected
 management 401. The phone also needed to join Wi-Fi. No remote configuration was
 changed; only the user-authorized local Python incoming rule was allowed.
+
+## Approved usability and plan-selection follow-up (2026-11-03)
+
+Items 1, 2, 3 and 5 were approved before implementation. Startup/docs now identify
+management credential setup without revealing the password; verified account state
+controls a collapsible reconnect/switch-account form. The page embeds a separate
+Clash Mi guide resource with base steps plus an optional Tailscale section. No
+Surge/sing-box guide implementation, auth-key UI or AI routing policy was added.
+
+The renderer now uses manual `Proxy → service/plan → node` groups. Constructed
+cases cover distinct and duplicate plan names, reserved-name collisions, empty
+services, missing metadata and all-node inclusion. Actual saved-account downloads
+in both modes retained all available nodes under their matching services and
+passed mihomo v1.19.32 checks. The official public rule sequence is unchanged.
+One old flat-group node choice may reset at the first update; choose a plan/node
+again. The new phone grouping UI has not yet been revalidated by the user; earlier
+phone acceptance above applies to the preceding flat selection layout.
+
+Constructed-data browser QA confirmed connected forms collapse, explicit reconnect
+opens the form, sign-out/expired credentials expand it, and upstream outages retain
+saved credentials without requesting a password retry. Login clears the password.
+The mobile guide's base/overlay details expand without horizontal overflow at
+390px. Wheel/sdist privacy checks pass and the bundled guide is included.

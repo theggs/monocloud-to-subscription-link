@@ -118,7 +118,7 @@ def create_app(
                         "management_auth_required",
                         401,
                         headers={
-                            "WWW-Authenticate": 'Basic realm="MonoCloud", charset="UTF-8"',
+                            "WWW-Authenticate": 'Basic realm="Subscription management", charset="UTF-8"',
                         },
                     )
             elif expected[1] not in ("localhost", "127.0.0.1", "::1"):
@@ -148,9 +148,11 @@ def create_app(
 
     @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
     def index():
-        return HTMLResponse(
-            resources.joinpath("login.html").read_text(encoding="utf-8")
+        page = resources.joinpath("login.html").read_text(encoding="utf-8")
+        guide = resources.joinpath("guides", "clash-mi.html").read_text(
+            encoding="utf-8"
         )
+        return HTMLResponse(page.replace("<!-- CLIENT_GUIDES -->", guide))
 
     @app.get("/assets/{name}")
     def asset(name: str):
@@ -164,18 +166,34 @@ def create_app(
         return Response(resources.joinpath(name).read_bytes(), media_type=types[name])
 
     @app.get("/api/status")
-    def status():
+    def status(verify: bool = False):
         try:
-            store.load()
-            saved = True
+            token = store.load()
         except ValueError:
-            saved = False
-        return {
+            token = None
+        result = {
             "oauth_configured": bool(
                 config.monocloud.client_id and config.monocloud.client_secret
             ),
-            "token_saved": saved,
+            "token_saved": token is not None,
         }
+        if verify:
+            state = "signed_out"
+            count = 0
+            if token is not None:
+                try:
+                    with httpx.Client(transport=transport) as http:
+                        plans = MonoCloudClient(config.monocloud, http).fetch_plans(
+                            token
+                        )
+                    state = "connected"
+                    count = len(plans)
+                except AuthenticationError:
+                    state = "expired"
+                except MonoCloudError:
+                    state = "unavailable"
+            result.update(account_state=state, plan_count=count)
+        return result
 
     @app.post("/api/login")
     def login(credentials: LoginRequest):

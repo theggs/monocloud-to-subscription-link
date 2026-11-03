@@ -17,10 +17,12 @@ def generate_subscription(config: Config, http: httpx.Client) -> str:
         raise AuthenticationError(
             "Sign in through the web interface before downloading."
         ) from None
-    nodes = MonoCloudClient(config.monocloud, http).fetch_all_nodes(token)
+    client = MonoCloudClient(config.monocloud, http)
+    plans = client.fetch_plans(token)
+    nodes = client.fetch_all_nodes(token, [plan.service_id for plan in plans])
     template = (
         load_template_snapshot(config.template_dir)
         if config.template_dir
         else fetch_template(http, config.monocloud)
     )
-    return generate_clash(template, nodes, config.clash, config.tailscale)
+    return generate_clash(template, nodes, config.clash, config.tailscale, plans=plans)

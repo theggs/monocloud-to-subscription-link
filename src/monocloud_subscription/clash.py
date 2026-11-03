@@ -6,7 +6,7 @@ from ipaddress import ip_network
 
 import yaml
 
-from monocloud_subscription.monocloud import Node
+from monocloud_subscription.monocloud import Node, Plan
 from monocloud_subscription.templates import validate_template
 
 
@@ -30,6 +30,8 @@ def generate_clash(
     nodes: list[Node],
     clash: ClashSettings,
     tailscale: TailscaleSettings,
+    *,
+    plans: list[Plan] | None = None,
 ) -> str:
     """Build a complete subscription, preserving the official rule sequence."""
     result = deepcopy(validate_template(template))
@@ -47,14 +49,29 @@ def generate_clash(
         "COMPATIBLE",
         "GLOBAL",
     }
-    proxies = []
-    for node in nodes:
-        name = node.name
+
+    def unique_name(label: str) -> str:
+        name = label
         number = 2
         while name in used:
-            name = f"{node.name} ({number})"
+            name = f"{label} ({number})"
             number += 1
         used.add(name)
+        return name
+
+    services = dict.fromkeys(node.service_id for node in nodes)
+    labels = {plan.service_id: plan.name for plan in (plans or [])}
+    groups = {
+        service_id: {
+            "name": unique_name(labels.get(service_id) or f"Plan {index}"),
+            "type": "select",
+            "proxies": [],
+        }
+        for index, service_id in enumerate(services, start=1)
+    }
+    proxies = []
+    for node in nodes:
+        name = unique_name(node.name)
         proxies.append(
             {
                 "name": name,
@@ -66,12 +83,14 @@ def generate_clash(
                 "udp": True,
             }
         )
+        groups[node.service_id]["proxies"].append(name)
     result["proxy-groups"] = [
         {
             "name": "Proxy",
             "type": "select",
-            "proxies": [proxy["name"] for proxy in proxies],
-        }
+            "proxies": [group["name"] for group in groups.values()],
+        },
+        *groups.values(),
     ]
     dns = result["dns"]
     # Preserve the official IP-based bootstrap policy, adding a default only

@@ -10,6 +10,8 @@ const feedback = document.querySelector("#feedback");
 const connection = document.querySelector("#connection");
 const connectionTitle = document.querySelector("#connection-title");
 const connectionDetail = document.querySelector("#connection-detail");
+const accountPanel = document.querySelector("#account-panel");
+const accountAction = document.querySelector("#account-action");
 let configured = false;
 
 function message(text, kind = "success") {
@@ -18,12 +20,20 @@ function message(text, kind = "success") {
   feedback.hidden = false;
 }
 
-function savedStatus(saved) {
-  connection.dataset.state = saved ? "saved" : "empty";
-  connectionTitle.textContent = saved ? "登录凭据已保存" : "尚未保存登录凭据";
-  connectionDetail.textContent = saved
-    ? "需要更换账户或重新验证时，可再次登录。"
-    : "登录后，当前服务会保存连接凭据。";
+function showAccount(status) {
+  const state = status.account_state;
+  connection.dataset.state = state === "connected" ? "saved" : "empty";
+  const labels = {
+    signed_out: ["尚未连接 MonoCloud", "登录账户后，即可使用订阅。"],
+    connected: ["MonoCloud 账户已连接", `已确认 ${status.plan_count} 个套餐；可在 Clash Mi 中切换套餐和节点。`],
+    expired: ["登录凭据已失效", "请重新登录后更新订阅。"],
+    unavailable: ["凭据已保存，暂时无法验证", "暂时无法确认账户连接；不必因此重新输入密码。"],
+  };
+  const label = labels[state] || ["登录凭据已保存", "暂时无法确认账户状态。"];
+  connectionTitle.textContent = label[0];
+  connectionDetail.textContent = label[1];
+  accountPanel.open = !status.token_saved || state === "expired";
+  accountAction.textContent = status.token_saved ? "重新登录 / 切换账户" : "登录 MonoCloud 账户";
 }
 
 toggle.addEventListener("click", () => {
@@ -35,19 +45,23 @@ toggle.addEventListener("click", () => {
 });
 
 async function loadStatus() {
+  let state = null;
   try {
-    const response = await fetch("/api/status", { cache: "no-store" });
+    const response = await fetch("/api/status?verify=true", { cache: "no-store" });
     if (!response.ok) throw new Error("status unavailable");
     const status = await response.json();
     configured = status.oauth_configured;
-    savedStatus(status.token_saved);
-    if (!configured) message("当前服务尚未配置登录参数，请联系部署者完成配置。", "error");
+    showAccount(status);
+    state = status.account_state;
+    if (!configured && !status.token_saved) message("当前服务尚未配置登录参数，请联系部署者完成配置。", "error");
   } catch {
+    accountPanel.open = true;
     connectionTitle.textContent = "暂时无法读取服务状态";
     connectionDetail.textContent = "请检查服务是否运行，并刷新页面重试。";
     message("无法连接当前服务，请刷新页面重试。", "error");
   }
   submit.disabled = !configured;
+  return state;
 }
 
 form.addEventListener("submit", async (event) => {
@@ -82,8 +96,10 @@ form.addEventListener("submit", async (event) => {
     } else if (result?.token_saved !== true) {
       message("当前服务返回了无效的登录结果，请稍后重试。", "error");
     } else {
-      savedStatus(true);
-      message("登录成功，连接凭据已保存。", "success");
+      const state = await loadStatus();
+      if (state === "connected") message("账户已连接，登录凭据已保存。");
+      else if (state === "expired") message("登录结果已保存，但账户验证未通过，请重新登录。", "error");
+      else if (state === "unavailable") message("凭据已保存，暂时无法验证账户连接。", "error");
     }
   } catch {
     message("与当前服务的连接中断，请检查连接后重试。", "error");

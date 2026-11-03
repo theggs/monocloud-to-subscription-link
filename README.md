@@ -52,16 +52,31 @@ The command prints `Configuration OK` and the configured data directory, then
 exits successfully. It does not create the directory, write credentials, contact
 MonoCloud, or start a server. A configuration error exits with status 2.
 
-For browser login, configure the private OAuth client parameters described below,
-then start the login page:
+Before starting the service, distinguish its two credentials:
+
+- **Management login:** username `admin`; the deployer chooses a private password
+  and supplies it through `MONOCLOUD_WEB_PASSWORD` in the process environment.
+  The application does not generate a management password. Startup prints the
+  username and variable name, never the password. Obtain this password from your
+  deployer; your MonoCloud account password does not unlock the management prompt.
+- **MonoCloud account login:** your account email/password, entered only inside
+  the management page. Configure the private OAuth application parameters below.
+
+Local loopback access can run without management authentication when the variable
+is unset. Set it before LAN access; use your deployment's private environment
+configuration rather than committed files or command-line password arguments.
+Then start the service:
 
 ```sh
 uv run monocloud-subscription --config .local/config.toml serve
 ```
 
 Open [http://127.0.0.1:8080](http://127.0.0.1:8080), enter your account email and
-password, and submit the form. The page shows pending/success/error states and
-whether a token is already saved. It does not display tokens or OAuth client
+password under **登录 MonoCloud 账户**, and submit. The page verifies a saved session
+using service discovery. A confirmed connected account collapses the form; use
+**重新登录 / 切换账户** to open it. Rejected credentials open the form for login,
+while a temporary upstream outage is distinguished from an expired session and
+preserves saved credentials. It does not display tokens or OAuth client
 secrets. Failed login preserves the previous token. The password is cleared from
 the form after each attempt and is not stored by the application.
 
@@ -88,9 +103,18 @@ entry point is limited to starting the service and checking configuration.
 
 After login, use the **客户端订阅** card to copy the Clash/mihomo URL. In Clash Mi,
 add it under **我的配置 → + → 添加配置链接**, select that profile and connect in rule
-mode. The URL remains stable across restarts. Toggle **启用 Tailscale**, save, then
+mode. In `Proxy`, choose a plan, then choose a node in that plan's group. Every
+available nonempty plan is included; there is no server-side plan filter. The
+first update from the former flat node list may reset the old selection: choose
+a plan/node once after upgrading. The URL remains stable across restarts. Toggle **启用 Tailscale**, save, then
 update the same profile in Clash Mi and reconnect; disabling it requires no
 Tailscale settings or authorization.
+
+The page's **客户端接入指南 → Clash Mi 接入** covers the base workflow, including
+plan selection and updates. Its optional Tailscale section extends that same
+profile and URL; it is not an alternative full setup. Surge and sing-box MT guides
+will accompany those client implementations; they are not offered as working
+setup flows yet.
 
 For a controlled home LAN, set `server.host` to your LAN listen address and
 `server.public_url` to the URL reachable by the phone, for example
@@ -236,7 +260,9 @@ nodes, downloads the official `Clash_ss` template from its update manifest, and
 checks its size and SHA-256 before parsing. Manifest and asset redirects are
 rejected, including HTTPS-to-HTTP redirects. Unexpected top-level template options
 and non-rule routing modes are rejected rather than copied into the client. It preserves the official rule order
-and provides one manual `Proxy` group containing every node. Name collisions are
+and provides manual `Proxy → plan → node` selection. Each nonempty service has
+its own group; equal display names remain separate, and every available node is
+included under its own service. Name collisions are
 renamed deterministically; automatic switching is not enabled. Failure raises a
 sanitized `ValueError` without writing output. The asset host must be reachable
 from the deployment; HTTP 403/network failures are reported without silently

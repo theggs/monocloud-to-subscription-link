@@ -154,7 +154,10 @@ class ClashTests(unittest.TestCase):
         self.assertEqual(len(result["proxies"]), 2)
         self.assertEqual(
             result["proxy-groups"],
-            [{"name": "Proxy", "type": "select", "proxies": ["One", "Two"]}],
+            [
+                {"name": "Proxy", "type": "select", "proxies": ["Plan 1"]},
+                {"name": "Plan 1", "type": "select", "proxies": ["One", "Two"]},
+            ],
         )
         self.assertEqual(result["rules"], before["rules"])
         self.assertEqual(self.template, before)
@@ -174,7 +177,7 @@ class ClashTests(unittest.TestCase):
         names = [n["name"] for n in result["proxies"]]
         self.assertEqual(len(set(names)), len(nodes))
         self.assertTrue(set(names).isdisjoint({"Proxy", "DIRECT", "Tailscale"}))
-        self.assertEqual(result["proxy-groups"][0]["proxies"], names)
+        self.assertEqual(result["proxy-groups"][1]["proxies"], names)
         self.assertEqual(self.render(nodes), result)
 
     def test_yaml_special_characters_remain_node_data(self):
@@ -375,3 +378,69 @@ class InteractiveAuthorizationTests(unittest.TestCase):
             )
             self.assertEqual(result["log-level"], "error")
         self.assertEqual(template["log-level"], "error")
+
+
+class PlanSelectionTests(unittest.TestCase):
+    def render(self, nodes, plans=None):
+        with template_client() as http:
+            template = fetch_template(http, MonoCloudSettings())
+        return yaml.safe_load(
+            generate_clash(
+                template, nodes, ClashSettings(), TailscaleSettings(), plans=plans
+            )
+        )
+
+    def test_proxy_selects_plans_then_each_plan_selects_only_its_nodes(self):
+        from dataclasses import replace
+
+        from monocloud_subscription.monocloud import Plan
+
+        nodes = [
+            replace(node("A1"), service_id="a"),
+            replace(node("A2"), service_id="a"),
+            replace(node("B1"), service_id="b"),
+        ]
+        result = self.render(
+            nodes, [Plan("a", "Basic"), Plan("b", "Pro"), Plan("empty", "Empty")]
+        )
+        self.assertEqual(
+            result["proxy-groups"],
+            [
+                {"name": "Proxy", "type": "select", "proxies": ["Basic", "Pro"]},
+                {"name": "Basic", "type": "select", "proxies": ["A1", "A2"]},
+                {"name": "Pro", "type": "select", "proxies": ["B1"]},
+            ],
+        )
+        self.assertEqual(len(result["proxies"]), 3)
+
+    def test_duplicate_plan_names_reserved_names_and_node_names_do_not_collide(self):
+        from dataclasses import replace
+
+        from monocloud_subscription.monocloud import Plan
+
+        result = self.render(
+            [
+                replace(node("Proxy (2)"), service_id="a"),
+                replace(node("DIRECT"), service_id="b"),
+            ],
+            [Plan("a", "Proxy"), Plan("b", "Proxy")],
+        )
+        groups = result["proxy-groups"]
+        names = [p["name"] for p in result["proxies"]] + [g["name"] for g in groups]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertEqual(len(groups), 3)
+        self.assertNotEqual(groups[1]["name"], groups[2]["name"])
+        self.assertEqual(groups[0]["proxies"], [g["name"] for g in groups[1:]])
+        self.assertEqual(
+            [g["proxies"][0] for g in groups[1:]],
+            [n["name"] for n in result["proxies"]],
+        )
+
+    def test_missing_plan_labels_preserve_all_service_memberships(self):
+        from dataclasses import replace
+
+        result = self.render([node("One"), replace(node("Two"), service_id="another")])
+        self.assertEqual(result["proxy-groups"][0]["proxies"], ["Plan 1", "Plan 2"])
+        self.assertEqual(
+            [g["proxies"] for g in result["proxy-groups"][1:]], [["One"], ["Two"]]
+        )

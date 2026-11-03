@@ -66,6 +66,16 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("Port must be between 1 and 65535.")
             host = f"[{bind_host}]" if ":" in bind_host else bind_host
             print(f"Listen URL: http://{host}:{bind_port}", file=sys.stderr)
+            if management_password:
+                print(
+                    "Management login — username: admin; password: supplied by the deployer via MONOCLOUD_WEB_PASSWORD. This is separate from the MonoCloud account password.",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    "Management access: loopback only, without a management password. Set MONOCLOUD_WEB_PASSWORD before LAN access.",
+                    file=sys.stderr,
+                )
             if not loopback:
                 print(
                     "WARNING: Remote HTTP does not encrypt account or management credentials. "

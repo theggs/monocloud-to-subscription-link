@@ -509,3 +509,52 @@ class SubscriptionWebTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(enabled["proxies"][-1]["type"], "tailscale")
             self.assertEqual(enabled["rules"][-len(plain["rules"]) :], plain["rules"])
             self.assertEqual((await self.details(client))["url"], details["url"])
+
+
+class VerifiedAccountTests(unittest.IsolatedAsyncioTestCase):
+    setUp = LoginPageTests.setUp
+    client = LoginPageTests.client
+
+    async def test_page_embeds_clash_mi_guide_with_optional_overlay(self):
+        page = await self.client().get("/")
+        self.assertIn('id="guide-clash-mi"', page.text)
+        self.assertIn("基础接入", page.text)
+        self.assertIn("可选：增加 Tailscale 能力", page.text)
+        self.assertNotIn("<!-- CLIENT_GUIDES -->", page.text)
+        self.assertNotIn('id="guide-surge"', page.text)
+        self.assertNotIn('id="guide-sing-box"', page.text)
+
+    async def test_signed_out_verified_status_does_not_contact_upstream(self):
+        result = await self.client().get("/api/status?verify=true")
+        self.assertEqual(result.json()["account_state"], "signed_out")
+        self.assertEqual(result.json()["plan_count"], 0)
+        self.assertEqual(self.requests, [])
+
+    async def test_verified_saved_session_reports_service_count_without_account_data(
+        self,
+    ):
+        TokenStore(self.config.token_file).save("constructed-token")
+        result = await self.client(
+            payload=[
+                {"id": 1, "plan": {"name": "private-plan-name", "type": "shadowsocks"}},
+                {"id": 2, "plan": {"name": "Other", "type": "shadowsocks"}},
+            ]
+        ).get("/api/status?verify=true")
+        self.assertEqual(result.json()["account_state"], "connected")
+        self.assertEqual(result.json()["plan_count"], 2)
+        self.assertNotIn("private-plan-name", result.text)
+        self.assertNotIn("constructed-token", result.text)
+        self.assertEqual(self.requests[0].url.path, "/api/service")
+
+    async def test_auth_rejection_expands_relogin_but_keeps_token(self):
+        TokenStore(self.config.token_file).save("constructed-token")
+        result = await self.client(status=401).get("/api/status?verify=true")
+        self.assertEqual(result.json()["account_state"], "expired")
+        self.assertTrue(result.json()["token_saved"])
+        self.assertEqual(TokenStore(self.config.token_file).load(), "constructed-token")
+
+    async def test_upstream_outage_is_not_reported_as_expired_credentials(self):
+        TokenStore(self.config.token_file).save("constructed-token")
+        result = await self.client(status=503).get("/api/status?verify=true")
+        self.assertEqual(result.json()["account_state"], "unavailable")
+        self.assertTrue(result.json()["token_saved"])
