@@ -1,8 +1,10 @@
 """Confirmed MonoCloud login and Shadowsocks node API operations."""
 
 import math
+import re
 import time
 from dataclasses import dataclass, field
+from ipaddress import ip_address
 from urllib.parse import quote
 
 import httpx
@@ -15,6 +17,26 @@ SIGN_OUT_REASONS = {
     "signed_out_from_website",
     "sign_in_limit",
 }
+_HOST_LABEL = re.compile(r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?")
+
+
+def _normalize_node_host(value: object) -> str | None:
+    if not isinstance(value, str) or "%" in value:
+        return None
+    try:
+        ip_address(value)
+    except ValueError:
+        try:
+            hostname = value.encode("idna").decode("ascii")
+        except UnicodeError:
+            return None
+        domain = hostname.removesuffix(".")
+        if len(domain) > 253 or not all(
+            _HOST_LABEL.fullmatch(label) for label in domain.split(".")
+        ):
+            return None
+        return hostname
+    return value
 
 
 class MonoCloudError(ValueError):
@@ -519,7 +541,7 @@ class MonoCloudClient:
         method, password, host, port = (
             params.get("method"),
             auth.get("password"),
-            value.get("host"),
+            _normalize_node_host(value.get("host")),
             value.get("port"),
         )
         supported = {
@@ -550,8 +572,7 @@ class MonoCloudClient:
         if (
             type(port) is not int
             or not 1 <= port <= 65535
-            or not isinstance(host, str)
-            or not host.strip()
+            or host is None
             or not isinstance(password, str)
             or not password.strip()
         ):

@@ -293,5 +293,6 @@ manifest's template list omits `Clash_ss`, the service downloads the asset from
 its known official URL and checks it against a pinned size and SHA-256. For an
 offline setup or a host that presents an automated-client challenge, configure
 `template_dir` with an operator-provided official snapshot containing
-`update.json` and `Clash_ss`. The service verifies the local asset against the
-local manifest. See the [verification record](clash-verification.md).
+`update.json` and `Clash_ss`. The same size and SHA-256 checks apply to the local
+asset, including the pinned values when the manifest omits its entry. See the
+[verification record](clash-verification.md).

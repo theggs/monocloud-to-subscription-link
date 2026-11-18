@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from test_clash import TEMPLATE
 
@@ -10,6 +11,23 @@ from monocloud_subscription.templates import load_template_snapshot
 
 
 class SnapshotTests(unittest.TestCase):
+    def test_snapshot_without_clash_entry_requires_pinned_size_and_digest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "update.json").write_text(json.dumps({"templates": []}))
+            asset = root / "Clash_ss"
+            asset.write_bytes(TEMPLATE)
+            with patch(
+                "monocloud_subscription.templates._PINNED_CLASH_TEMPLATE",
+                {"size": len(TEMPLATE), "sha256": hashlib.sha256(TEMPLATE).hexdigest()},
+            ):
+                self.assertEqual(
+                    load_template_snapshot(root)["rules"][-1], "MATCH,Proxy"
+                )
+                asset.write_bytes(b"x" * len(TEMPLATE))
+                with self.assertRaises(ValueError):
+                    load_template_snapshot(root)
+
     def test_official_snapshot_uses_same_integrity_checks_without_network(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

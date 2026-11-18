@@ -328,6 +328,26 @@ class V2Tests(unittest.TestCase):
         self.assertNotIn("synthetic-access", repr(session))
         self.assertNotIn("synthetic-refresh", repr(session))
 
+    def test_v2_node_accepts_bare_hosts_and_rejects_malformed_addresses(self):
+        for host in (
+            "https://node.example.invalid/path",
+            "node.example.invalid:443",
+            "node\x00.example.invalid",
+            "[2001:db8::1]",
+        ):
+            with self.subTest(host=host), self.assertRaises(MonoCloudError):
+                MonoCloudClient._v2_node({**SERVER, "host": host}, "123", 1)
+
+        for host, expected in (
+            ("node.example.invalid.", "node.example.invalid."),
+            ("192.0.2.1", "192.0.2.1"),
+            ("2001:db8::1", "2001:db8::1"),
+            ("bücher.example.invalid", "xn--bcher-kva.example.invalid"),
+        ):
+            with self.subTest(host=host):
+                node = MonoCloudClient._v2_node({**SERVER, "host": host}, "123", 1)
+                self.assertEqual(node.server, expected)
+
     def test_ss2022_requires_valid_base64_psk_lengths(self):
         for password in ("ordinary-password", encoded(bytes(15)), encoded(bytes(32))):
             with self.subTest(password_length=len(password)):

@@ -87,6 +87,16 @@ def validate_template(template: object) -> dict:
     return template
 
 
+def _clash_template_entry(manifest: dict) -> dict:
+    entries = manifest["templates"]
+    if not isinstance(entries, list):
+        raise ValueError
+    return next(
+        (entry for entry in entries if entry["name"] == "Clash_ss"),
+        _PINNED_CLASH_TEMPLATE,
+    )
+
+
 def fetch_template(http: httpx.Client, settings: MonoCloudSettings) -> dict:
     """Verify the exact resource bytes before normalizing known placeholders."""
     headers = {"User-Agent": settings.user_agent}
@@ -95,14 +105,7 @@ def fetch_template(http: httpx.Client, settings: MonoCloudSettings) -> dict:
             MANIFEST_URL, headers=headers, timeout=20, follow_redirects=False
         )
         response.raise_for_status()
-        manifest = response.json()
-        entries = manifest["templates"]
-        if not isinstance(entries, list):
-            raise ValueError
-        entry = next(
-            (item for item in entries if item["name"] == "Clash_ss"),
-            _PINNED_CLASH_TEMPLATE,
-        )
+        entry = _clash_template_entry(response.json())
         if not isinstance(entry["url"], str):
             raise ValueError
         url = urlsplit(entry["url"])
@@ -126,19 +129,17 @@ def fetch_template(http: httpx.Client, settings: MonoCloudSettings) -> dict:
 
 
 def load_template_snapshot(directory: Path) -> dict:
-    """Use an explicitly configured official snapshot; never an implicit fallback."""
+    """Use an explicitly configured official snapshot without network access."""
     try:
         manifest = json.loads((directory / "update.json").read_text(encoding="utf-8"))
-        entry = next(
-            item for item in manifest["templates"] if item["name"] == "Clash_ss"
-        )
+        entry = _clash_template_entry(manifest)
         content = (directory / "Clash_ss").read_bytes()
         if (
             len(content) != entry["size"]
             or hashlib.sha256(content).hexdigest() != entry["sha256"]
         ):
             raise ValueError
-    except (OSError, ValueError, KeyError, TypeError, StopIteration):
+    except (OSError, ValueError, KeyError, TypeError):
         raise ValueError(
             "Cannot read or verify the official template snapshot."
         ) from None
