@@ -22,8 +22,8 @@ configuration validation. Live refresh-token rotation and device acceptance for
 service discovery, and node retrieval are implemented. The complete account workflow
 is tested against a local HTTP server using constructed credentials. Browser login
 and reuse of its saved token for service/node discovery have also been verified
-against MonoCloud. The browser page provides a protected Clash/mihomo subscription
-link and a persistent Tailscale toggle. Both generator modes pass core checks;
+against MonoCloud. The browser page provides separate protected Clash/mihomo
+subscriptions for proxy-only and proxy with Tailscale. Both generator modes pass core checks;
 Clash Mi 1.0.31.1703 URL import/update, both modes, Tailnet DNS/access and
 restart persistence have been verified on iPhone. See
 [verification](docs/clash-verification.md).
@@ -72,7 +72,12 @@ uv run --env-file .local/service.env monocloud-subscription --config .local/conf
 
 Open [http://127.0.0.1:8080](http://127.0.0.1:8080). The management username is
 `admin`; use the password you put in `.local/service.env`. Then follow the page's
-steps from account login to **导入客户端**. For LAN access from other devices or HTTPS, see
+steps from account login to **导入客户端**. Copy or download **仅代理** or
+**代理 + Tailscale**. You can import both and switch between them in the client.
+The page reads the saved session locally. Use **刷新账户与节点** to verify the
+account and check the available plans and nodes. Client subscription updates
+fetch current data independently of this button.
+For LAN access from other devices or HTTPS, see
 [deployment](docs/deployment.md).
 
 ## Configuration and private data
@@ -85,7 +90,7 @@ Configuration uses TOML. Supply its path explicitly with `--config`.
 | `template_dir` | No | Explicit local official snapshot directory with `update.json` and `Clash_ss`. Both size and SHA-256 are verified; default is HTTPS download. Relative to TOML. |
 | `server.host`, `server.port` | No | Listen address and port; default `127.0.0.1:8080`. CLI flags override them. |
 | `server.public_url` | No | Base URL reachable by clients; defaults to the management browser origin. No credentials, query or fragment. |
-| `subscription.key` | No | Private random URL-safe key override (32-128 characters); normally generated automatically. |
+| `subscription.key` | No | Private random URL-safe key override for the original `clash.yaml` link (32–128 characters). |
 | `token_file` | No | Token JSON path; defaults to `data_dir/token.json`. An explicit relative path resolves against the configuration file. |
 | `monocloud.base_url` | No | HTTPS API root; defaults to the researched MonoCloud API. |
 | `monocloud.api_version` | No | `v2` (default) or explicit `legacy`; no automatic downgrade. |
@@ -96,7 +101,7 @@ Configuration uses TOML. Supply its path explicitly with `--config`.
 | `monocloud.request_context` | Deployment-dependent | Optional already-encoded `X-Request-Context`; not generated or fabricated by this service. |
 | `monocloud.client_platform`, `monocloud.os_version`, `monocloud.device_model`, `monocloud.device_model_name` | No | Optional already-encoded device headers, omitted when empty. |
 | `clash.mixed_port` | No | Client mixed proxy port, default `7890`; LAN access is disabled in generated configs. |
-| `tailscale.enabled` | No | Opt in to Tailscale, default `false`. |
+| `tailscale.enabled` | No | Default Tailscale mode for the original `clash.yaml` link, default `false`. |
 | `tailscale.hostname` | No | Client's Tailnet device name. |
 | `tailscale.state_dir` | No | Persistent path on the **client**, default `tailscale`. Never resolved against the server's configuration path. |
 | `tailscale.auth_key` | No | Private authorization key; omitted from output if unset. The core then logs a login URL. |
@@ -109,12 +114,12 @@ also supported. Use an absolute configuration path when invoking the installed
 command from another directory.
 
 Keep private research, personal configuration, future credentials, and runtime
-data in `.local/`, which Git ignores. The first server startup creates
-`data_dir/subscription.json` with a random 256-bit URL credential. Preserve this
-file to preserve client URLs; it also stores the saved Tailscale enabled override.
-If there is no override, the TOML flag is used. Changing TOML alone does not replace
-a browser-saved toggle; use the page to change it. Corrupt state fails explicitly
-rather than silently resetting it. State updates use owner-only temporary files
+data in `.local/`, which Git ignores. Preserve `data_dir/subscription.json` to
+preserve client URLs. The service stores the original URL credential and a separate
+random secret for the two new URLs, each of which grants access to only its own
+configuration. Upgrading adds the new secret to existing state. The original
+`clash.yaml` URL still uses its saved Tailscale choice or the TOML default.
+Corrupt state fails explicitly. State updates use owner-only temporary files
 and atomic replacement. Run one application worker for this local file store. An external private directory is equally
 valid. On POSIX systems new token files have owner-only permissions; token updates
 replace the file atomically. Existing directory permissions are left unchanged;

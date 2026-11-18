@@ -16,7 +16,7 @@
 
   <main>
     <h1>设置你的代理订阅</h1>
-    <p id="next-step" class="lead" aria-live="polite">正在检查账户…</p>
+    <p id="next-step" class="lead" aria-live="polite">正在读取本地会话…</p>
 
     <ol class="steps">
       <li class="step" id="step-account" data-s="active">
@@ -24,17 +24,18 @@
         <div class="panel">
           <div class="ph">
             <div class="tt">
-              <h2><span id="account-title">MonoCloud 账户</span> <span id="account-pill" class="pill mute">检查中…</span></h2>
+              <h2><span id="account-title">MonoCloud 账户</span> <span id="account-pill" class="pill mute">读取中…</span></h2>
               <p id="account-meta" class="meta" hidden></p>
+              <p id="account-refresh-time" class="meta" role="status" hidden>最近刷新 <time id="account-refreshed-at"></time></p>
             </div>
-            <button id="account-switch" class="link" type="button" hidden>切换账户</button>
+            <div id="account-actions" class="account-actions" hidden>
+              <button id="account-refresh" class="link" type="button" aria-busy="false">刷新账户与节点</button>
+              <button id="account-switch" class="link" type="button">切换账户</button>
+            </div>
           </div>
           <div id="account-body" class="pb" hidden>
             <div id="account-blocked" class="alert err" hidden>此服务还没有完成 MonoCloud 登录配置。请联系部署者处理，完成后刷新本页再登录。</div>
-            <div id="account-recheck" hidden>
-              <p id="account-recheck-text" class="txt"></p>
-              <div class="row"><button id="verify-again" class="btn blue sm" type="button">重新验证</button></div>
-            </div>
+            <button id="retry-status" class="btn blue sm" type="button" hidden>重试</button>
             <form id="login-form" aria-busy="false" hidden>
               <p class="hint">这里填 <b>MonoCloud 账户</b>的密码，不是打开本页时输入的管理密码。密码只用于这次登录，不会保存；登录后本服务会保存登录凭据，下次无需重新登录。</p>
               <div class="field"><label for="email">邮箱</label><input id="email" name="email" type="email" autocomplete="username" placeholder="you@example.com" required maxlength="320" spellcheck="false" autocapitalize="none"></div>
@@ -47,49 +48,41 @@
         </div>
       </li>
 
-      <li class="step" id="step-content" data-s="idle">
+      <li class="step" id="step-link" data-s="idle">
         <span class="num"><span class="visually-hidden" data-step-label>步骤 2</span><span aria-hidden="true" data-glyph>2</span></span>
         <div class="panel">
-          <div class="ph">
-            <div class="tt"><h2 id="content-title">订阅内容 <span id="content-dirty" class="pill warn" hidden>未保存</span></h2><p id="content-meta" class="meta">读取中…</p></div>
-            <fieldset id="content-choice" class="seg" aria-labelledby="content-title" hidden>
-              <label><input type="radio" name="content" value="proxy">仅代理</label>
-              <label><input type="radio" name="content" value="tailscale">代理 + Tailscale</label>
-            </fieldset>
-          </div>
-          <div id="content-body" class="pb" hidden>
-            <p id="content-ts-note" class="faint" hidden>客户端第一次访问 Tailnet 时，需要完成一次 Tailscale 授权。具体步骤见各客户端的接入说明。</p>
-            <div id="content-error" class="alert err" role="alert" hidden></div>
-            <div id="content-actions" class="row" hidden>
-              <button id="content-save" class="btn blue sm" type="button"><span class="spin" aria-hidden="true"></span><span id="content-save-label">保存</span></button>
-              <button id="content-undo" class="link" type="button">撤销</button>
-              <span id="content-hint" class="faint">订阅链接不变</span>
-            </div>
-            <div id="content-saved" class="alert ok" role="status" hidden>已保存。如果客户端已导入这份订阅，请在客户端更新订阅并重新连接。</div>
-          </div>
-        </div>
-      </li>
-
-      <li class="step" id="step-link" data-s="idle">
-        <span class="num"><span class="visually-hidden" data-step-label>步骤 3</span><span aria-hidden="true" data-glyph>3</span></span>
-        <div class="panel">
-          <div class="ph"><div class="tt"><h2>订阅链接</h2><p class="meta">不同客户端使用不同格式的链接</p></div></div>
+          <div class="ph"><div class="tt"><h2>订阅链接</h2></div></div>
           <div class="pb">
             <p id="link-pending" class="txt" hidden></p>
             <div id="link-ready" hidden>
-              <div id="link-unsaved" class="alert warn first" hidden></div>
               <div class="format-head"><b>mihomo</b><span>Clash Mi 等 mihomo 内核客户端</span></div>
-              <div class="url-row">
-                <code id="subscription-url" class="url" tabindex="0" aria-label="mihomo 订阅链接"></code>
-                <button id="copy-subscription" class="btn blue" type="button">复制链接</button>
-              </div>
-              <div class="row">
-                <button id="url-toggle" class="link" type="button" aria-expanded="false" aria-controls="subscription-url">显示完整链接</button>
-                <a id="download-subscription" class="link" download>下载配置文件</a>
-                <span class="faint">链接含访问凭据，不要分享给他人</span>
+              <div class="subscription-options">
+                <section class="subscription-option" data-subscription="proxy" aria-labelledby="proxy-title">
+                  <h3 id="proxy-title">仅代理</h3>
+                  <div class="url-row">
+                    <code id="proxy-url" class="url" data-url tabindex="0" aria-label="仅代理订阅链接"></code>
+                    <button class="btn blue" type="button" data-copy aria-label="复制仅代理订阅链接">复制链接</button>
+                  </div>
+                  <div class="row">
+                    <button class="link" type="button" data-toggle aria-expanded="false" aria-controls="proxy-url">显示完整链接</button>
+                    <a class="link" data-download download aria-label="下载仅代理配置文件">下载配置文件</a>
+                  </div>
+                  <div class="alert warn" data-copy-failed role="status" hidden>无法自动复制。已展开并选中链接，请手动复制。</div>
+                </section>
+                <section class="subscription-option" data-subscription="tailscale" aria-labelledby="tailscale-title">
+                  <h3 id="tailscale-title">代理 + Tailscale</h3>
+                  <div class="url-row">
+                    <code id="tailscale-url" class="url" data-url tabindex="0" aria-label="代理 + Tailscale 订阅链接"></code>
+                    <button class="btn blue" type="button" data-copy aria-label="复制代理 + Tailscale 订阅链接">复制链接</button>
+                  </div>
+                  <div class="row">
+                    <button class="link" type="button" data-toggle aria-expanded="false" aria-controls="tailscale-url">显示完整链接</button>
+                    <a class="link" data-download download aria-label="下载代理 + Tailscale 配置文件">下载配置文件</a>
+                  </div>
+                  <div class="alert warn" data-copy-failed role="status" hidden>无法自动复制。已展开并选中链接，请手动复制。</div>
+                </section>
               </div>
               <div id="link-loopback" class="alert warn" hidden>这是本机地址，只有运行本服务的这台机器能用，其他设备无法访问。请联系部署者配置其他设备可访问的地址。</div>
-              <div id="link-copy-failed" class="alert warn" role="status" hidden>无法自动复制。已展开并选中链接，请手动复制，然后按下面的说明导入。</div>
               <div id="link-unverified" class="alert warn" hidden>账户暂时无法验证，客户端现在更新可能失败。可以先复制，稍后再更新。</div>
             </div>
             <p class="faint later">Surge、sing-box 格式尚未支持。</p>
@@ -98,7 +91,7 @@
       </li>
 
       <li class="step" id="step-client" data-s="idle">
-        <span class="num"><span class="visually-hidden" data-step-label>步骤 4</span><span aria-hidden="true" data-glyph>4</span></span>
+        <span class="num"><span class="visually-hidden" data-step-label>步骤 3</span><span aria-hidden="true" data-glyph>3</span></span>
         <div class="panel">
           <div class="ph"><div class="tt"><h2>导入客户端</h2><p class="meta">选择你使用的客户端，展开查看步骤</p></div></div>
           <div class="pb">

@@ -32,6 +32,7 @@ client_version = "1.5.0"
 mixed_port = 7890
 
 [tailscale]
+# Default for the original clash.yaml subscription link.
 enabled = false
 # These values configure the CLIENT, not the subscription server.
 # hostname = "example-phone"
@@ -47,6 +48,6 @@ port = 8080
 # public_url = "https://subscriptions.example.invalid"
 
 [subscription]
-# Optional private override; otherwise a random key is generated and persisted.
+# Optional private override for the original clash.yaml subscription link.
 # Use a cryptographically random URL-safe value, 32-128 characters.
 # key = ""

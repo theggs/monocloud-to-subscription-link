@@ -17,6 +17,7 @@ api_version = "v2"
 mixed_port = 7890
 
 [tailscale]
+# Default for the original clash.yaml subscription link.
 enabled = false
 # Client-side settings, unrelated to container paths or networking.
 # hostname = "example-phone"

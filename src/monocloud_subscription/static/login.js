@@ -6,29 +6,29 @@ const email = $("email");
 const password = $("password");
 const passwordToggle = $("password-toggle");
 const loginSubmit = $("login-submit");
-const subscriptionUrl = $("subscription-url");
-const download = $("download-subscription");
-const guide = $("guide-clash-mi");
-const tailscaleGuide = $("guide-clash-mi-tailscale");
+const refreshButton = $("account-refresh");
+const refreshTime = new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "medium" });
+const linkCards = Array.from(document.querySelectorAll("[data-subscription]"), (card) => ({
+  mode: card.dataset.subscription,
+  url: card.querySelector("[data-url]"),
+  copy: card.querySelector("[data-copy]"),
+  toggle: card.querySelector("[data-toggle]"),
+  download: card.querySelector("[data-download]"),
+  warning: card.querySelector("[data-copy-failed]"),
+  copied: false,
+  expanded: false,
+}));
 
-// One state object; render() derives every visible element from it.
 const state = {
-  status: null, // /api/status?verify=true response
+  status: null,
   statusFailed: false,
+  refreshing: false,
   sub: null, // /api/subscription response
   subFailed: false,
-  draft: null, // unsaved Tailscale choice; null means "same as saved"
-  saving: false,
-  saveFailed: false,
-  justSaved: false,
   relogin: false,
   loggingIn: false,
   loginError: "",
-  copied: false,
-  copyFailed: false,
-  urlOpen: false,
-  guideTouched: false,
-  tailscaleGuideTouched: false,
+  linkUsed: false,
 };
 
 function model() {
@@ -36,22 +36,17 @@ function model() {
   let account = "checking";
   if (state.statusFailed) account = "unreachable";
   else if (s) {
-    account = s.account_state;
+    account = s.account_state || (s.token_saved ? "saved" : "signed_out");
     if (account === "connected" && s.plan_count === 0) account = "connected_empty";
   }
   const oauth = Boolean(s?.oauth_configured);
-  const verified = account === "connected" || account === "connected_empty";
+  const hasSession = Boolean(s?.token_saved) && account !== "expired" && account !== "signed_out";
   const needLogin = account === "signed_out" || account === "expired" || state.relogin;
   const subOk = Boolean(state.sub) && !state.subFailed;
-  const saved = Boolean(state.sub?.tailscale_enabled);
-  const chosen = state.draft === null ? saved : state.draft;
-  const dirty = subOk && chosen !== saved;
-  const unchosen = subOk && !state.sub.tailscale_choice_saved;
   let active;
   if (needLogin || ["checking", "unreachable", "unavailable", "connected_empty"].includes(account)) active = 1;
-  else if (!subOk || dirty || unchosen) active = 2;
-  else active = state.copied ? 4 : 3;
-  return { account, oauth, verified, needLogin, subOk, saved, chosen, dirty, unchosen, active };
+  else active = subOk && state.linkUsed ? 3 : 2;
+  return { account, oauth, hasSession, needLogin, subOk, active };
 }
 
 function stepState(n, m) {
@@ -61,7 +56,7 @@ function stepState(n, m) {
     if (n === 2 && state.subFailed) return "blocked";
     return "active";
   }
-  if (n < m.active && (n !== 1 || m.verified)) return "done";
+  if (n < m.active && (n !== 1 || m.hasSession)) return "done";
   return "idle";
 }
 
@@ -90,7 +85,7 @@ function renderAccount(m) {
   let title = "MonoCloud 账户";
   let meta = "";
   pill("", "mute");
-  if (m.account === "checking") pill("检查中…", "mute");
+  if (m.account === "checking") pill("读取中…", "mute");
   else if (m.account === "unreachable") {
     pill("无法读取状态", "err");
     meta = "请检查服务是否运行，然后重试。";
@@ -106,39 +101,45 @@ function renderAccount(m) {
     title = "重新登录 MonoCloud 账户";
     pill("登录已失效", "err");
     meta = "失效期间，客户端无法更新订阅。";
+  } else if (m.account === "saved") {
+    pill("登录已保存", "mute");
   } else if (m.account === "unavailable") {
-    pill("暂时无法验证", "warn");
-    meta = "已保存登录，但现在无法确认账户状态。";
+    pill("刷新失败", "warn");
+    meta = "暂时无法获取套餐和节点，请稍后重试。";
   } else if (m.account === "connected_empty") {
     pill("没有可用套餐", "warn");
     meta = "账户已验证，但目前没有可用套餐。";
   } else {
-    pill("已验证", "ok");
-    meta = `${s.plan_count} 个可用套餐：${s.plan_names.join("、")}`;
+    pill(s.node_count === 0 ? "没有可用节点" : "已验证", s.node_count === 0 ? "warn" : "ok");
+    meta = `${s.plan_names.join("、")} · ${s.node_count} 个 Shadowsocks 节点`;
   }
   if (m.needLogin && !m.oauth && s) pill("暂时无法登录", "err");
   $("account-title").textContent = title;
   $("account-meta").textContent = meta;
   show("account-meta", Boolean(meta));
 
-  const switchable = (m.verified || m.account === "unavailable") && !state.relogin;
-  $("account-switch").textContent = m.account === "unavailable" ? "重新登录" : "切换账户";
-  show("account-switch", switchable);
+  const updated = new Date(s?.refreshed_at ?? NaN);
+  const hasRefreshTime = !state.relogin && Number.isFinite(updated.getTime());
+  if (hasRefreshTime) {
+    const timestamp = $("account-refreshed-at");
+    timestamp.dateTime = s.refreshed_at;
+    timestamp.textContent = refreshTime.format(updated);
+  }
+  show("account-refresh-time", hasRefreshTime);
+  show("account-actions", m.hasSession && !state.relogin);
+  refreshButton.disabled = state.refreshing;
+  refreshButton.setAttribute("aria-busy", String(state.refreshing));
+  refreshButton.textContent = state.refreshing ? "正在刷新…" : "刷新账户与节点";
+  $("account-switch").disabled = state.refreshing;
 
   const blocked = m.needLogin && !m.oauth && Boolean(s);
   const canLogin = m.needLogin && m.oauth;
-  const recheck = ["unavailable", "connected_empty", "unreachable"].includes(m.account) && !state.relogin;
+  const retryStatus = m.account === "unreachable";
   show("account-blocked", blocked);
   show("login-form", canLogin);
   show("login-cancel-row", state.relogin);
-  show("account-recheck", recheck);
-  $("account-recheck-text").textContent = {
-    unavailable: "可能是 MonoCloud 暂时无法访问。稍后重试即可，不必重新输入密码。",
-    connected_empty: "请在 MonoCloud 确认套餐状态，然后回来重新验证。",
-    unreachable: "暂时无法读取本服务的状态。",
-  }[m.account] || "";
-  $("verify-again").textContent = m.account === "unreachable" ? "重试" : "重新验证";
-  show("account-body", blocked || canLogin || recheck || state.relogin);
+  show("retry-status", retryStatus);
+  show("account-body", blocked || canLogin || retryStatus || state.relogin);
 
   loginForm.setAttribute("aria-busy", String(state.loggingIn));
   for (const control of [email, password, passwordToggle, loginSubmit]) control.disabled = state.loggingIn;
@@ -149,113 +150,70 @@ function renderAccount(m) {
   show("login-feedback", Boolean(state.loginError) && !state.loggingIn);
 }
 
-function renderContent(m) {
-  const loading = !state.sub && !state.subFailed;
-  $("content-meta").textContent = loading ? "读取中…" : "";
-  show("content-meta", loading);
-  show("content-choice", m.subOk);
-  show("content-dirty", m.dirty);
-  for (const radio of document.querySelectorAll('input[name="content"]')) {
-    radio.checked = (radio.value === "tailscale") === m.chosen;
-    radio.disabled = state.saving;
-  }
-  const error = state.subFailed
-    ? "无法读取订阅设置。请确认服务正在运行，然后刷新页面。"
-    : state.saveFailed ? "保存失败，你的选择仍保留，请重试。" : "";
-  $("content-error").textContent = error;
-  show("content-error", Boolean(error));
-  show("content-ts-note", m.subOk && m.chosen);
-  // A first-time confirmation waits until earlier steps are done.
-  const pending = m.dirty || (m.unchosen && m.active === 2);
-  show("content-actions", m.subOk && pending);
-  $("content-save").setAttribute("aria-busy", String(state.saving));
-  $("content-save").disabled = state.saving;
-  $("content-undo").disabled = state.saving;
-  show("content-undo", m.dirty);
-  $("content-save-label").textContent = state.saving
-    ? "正在保存…"
-    : state.saveFailed ? "重试保存" : m.unchosen && !m.dirty ? "确认" : "保存";
-  $("content-hint").textContent = m.unchosen && !m.dirty ? "之后可以随时修改，链接不变" : "订阅链接不变";
-  show("content-saved", state.justSaved && !pending);
-  show("content-body", state.subFailed || (m.subOk && (m.chosen || pending || state.justSaved || state.saveFailed)));
-}
-
-function renderLink(m, stepValue) {
+function renderLink(m) {
   let pending = "";
   if (m.account === "checking" || (!state.sub && !state.subFailed)) pending = "";
   else if (state.subFailed) pending = "订阅读取恢复后在这里显示。";
   else if (m.needLogin || m.account === "unreachable") pending = "登录账户后，在这里复制链接。";
-  else if (m.account === "connected_empty") pending = "账户有可用套餐后，客户端才能从这个链接获取配置。";
   const ready = m.subOk && !pending && m.account !== "checking";
   $("link-pending").textContent = pending;
   show("link-pending", Boolean(pending));
   show("link-ready", ready);
   if (!ready) return;
 
-  const url = state.sub.url;
-  subscriptionUrl.textContent = url;
-  subscriptionUrl.classList.toggle("expanded", state.urlOpen);
-  download.href = url;
-  $("url-toggle").textContent = state.urlOpen ? "收起" : "显示完整链接";
-  $("url-toggle").setAttribute("aria-expanded", String(state.urlOpen));
-  const copy = $("copy-subscription");
-  copy.textContent = state.copied ? "已复制" : "复制链接";
-  copy.className = `btn ${stepValue === "active" ? "blue" : "ghost"}`;
-  $("link-unsaved").textContent = m.dirty
-    ? `订阅内容的修改还没保存。这个链接目前提供的是已保存的内容（${m.saved ? "代理 + Tailscale" : "仅代理"}）。`
-    : "";
-  show("link-unsaved", m.dirty);
+  for (const card of linkCards) {
+    const url = state.sub[`${card.mode}_url`];
+    card.url.textContent = url;
+    card.url.classList.toggle("expanded", card.expanded);
+    card.toggle.textContent = card.expanded ? "收起" : "显示完整链接";
+    card.toggle.setAttribute("aria-expanded", String(card.expanded));
+    card.copy.textContent = card.copied ? "已复制" : "复制链接";
+    card.download.href = url;
+  }
   let host = "";
   try {
-    host = new URL(url).hostname;
+    host = new URL(state.sub.proxy_url).hostname;
   } catch {
     host = "";
   }
   show("link-loopback", ["localhost", "127.0.0.1", "[::1]"].includes(host));
-  show("link-copy-failed", state.copyFailed);
   show("link-unverified", m.account === "unavailable");
 }
 
-function renderClient(m, stepValue) {
+function renderClient() {
   const names = state.status?.plan_names || [];
   for (const slot of document.querySelectorAll("[data-plan-names]")) {
     slot.textContent = names.length ? `可选套餐：${names.join("、")}。` : "";
   }
-  if (guide && !state.guideTouched) guide.open = stepValue === "active";
-  if (tailscaleGuide && !state.tailscaleGuideTouched) tailscaleGuide.open = m.saved;
 }
 
 function nextStep(m) {
-  if (m.account === "checking") return "正在检查账户…";
+  if (m.account === "checking") return "正在读取本地会话…";
   if (m.account === "unreachable") return "暂时无法读取服务状态，请重试。";
   if (state.relogin) return state.loggingIn
     ? "正在登录另一个 MonoCloud 账户，请等待结果；处理期间无法取消。"
     : "下一步：<b>登录另一个 MonoCloud 账户</b>，或取消保留当前账户。";
   if (m.needLogin && !m.oauth) return "暂时无法登录，需要部署者先完成配置。";
   if (m.needLogin) return "下一步：<b>登录 MonoCloud 账户</b>。";
-  if (m.account === "unavailable") return "下一步：<b>重新验证账户</b>，或稍后再试。";
+  if (m.account === "unavailable") return "可稍后重试刷新，或继续使用订阅链接。";
   if (m.account === "connected_empty") return "账户已验证，但没有可用套餐。";
-  if (state.subFailed) return "订阅设置读取失败，请刷新页面重试。";
-  if (!m.subOk) return "正在读取订阅设置…";
-  if (m.unchosen && !m.dirty) return "下一步：<b>确认订阅内容</b>。";
-  if (m.dirty) return "下一步：<b>保存订阅内容</b>。";
-  if (!state.copied) return "下一步：<b>复制订阅链接</b>，导入客户端。";
+  if (state.subFailed) return "订阅链接读取失败，请刷新页面重试。";
+  if (!m.subOk) return "正在读取订阅链接…";
+  if (!state.linkUsed) return "下一步：<b>复制需要的订阅链接</b>，导入客户端。";
   return "下一步：<b>按下面的说明在客户端添加或更新订阅</b>。";
 }
 
 function render() {
   const m = model();
-  const values = [1, 2, 3, 4].map((n) => stepState(n, m));
+  const values = [1, 2, 3].map((n) => stepState(n, m));
   setStep("step-account", 1, values[0]);
-  setStep("step-content", 2, values[1]);
-  setStep("step-link", 3, values[2]);
-  setStep("step-client", 4, values[3]);
+  setStep("step-link", 2, values[1]);
+  setStep("step-client", 3, values[2]);
   // Static markup only: the line never contains server-provided text.
   $("next-step").innerHTML = nextStep(m);
   renderAccount(m);
-  renderContent(m);
-  renderLink(m, values[2]);
-  renderClient(m, values[3]);
+  renderLink(m);
+  renderClient();
 }
 
 let toastTimer;
@@ -273,7 +231,7 @@ async function loadStatus() {
   state.statusFailed = false;
   render();
   try {
-    const response = await fetch("api/status?verify=true", { cache: "no-store" });
+    const response = await fetch("api/status", { cache: "no-store" });
     if (!response.ok) throw new Error("status unavailable");
     state.status = await response.json();
   } catch {
@@ -281,14 +239,15 @@ async function loadStatus() {
     state.statusFailed = true;
   }
   render();
-  return state.status?.account_state;
 }
 
 async function loadSubscription() {
   try {
     const response = await fetch("api/subscription", { cache: "no-store" });
     if (!response.ok) throw new Error("subscription unavailable");
-    state.sub = await response.json();
+    const subscription = await response.json();
+    if (!subscription?.proxy_url || !subscription?.tailscale_url) throw new Error("missing subscription URLs");
+    state.sub = subscription;
     state.subFailed = false;
   } catch {
     state.subFailed = true;
@@ -319,7 +278,28 @@ $("login-cancel").addEventListener("click", () => {
   $("account-switch").focus();
 });
 
-$("verify-again").addEventListener("click", loadStatus);
+$("retry-status").addEventListener("click", loadStatus);
+
+refreshButton.addEventListener("click", async () => {
+  if (state.refreshing || !model().hasSession || state.relogin) return;
+  state.refreshing = true;
+  render();
+  try {
+    const response = await fetch("api/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error("refresh unavailable");
+    state.status = await response.json();
+  } catch {
+    state.status = { ...state.status, account_state: "unavailable", refreshed_at: new Date().toISOString() };
+  } finally {
+    state.refreshing = false;
+    render();
+  }
+});
 
 const loginErrors = {
   login_rejected: "登录未通过，请检查邮箱和密码后重试。",
@@ -352,9 +332,8 @@ loginForm.addEventListener("submit", async (event) => {
       state.loginError = "本服务返回了无效的登录结果，请稍后重试。";
     } else {
       state.relogin = false;
-      const account = await loadStatus();
-      if (account === "connected") toast("账户已连接");
-      else if (account === "expired") state.loginError = "登录结果已保存，但账户验证未通过，请重新登录。";
+      state.status = { oauth_configured: true, token_saved: true };
+      toast("登录已保存");
     }
   } catch {
     state.loginError = "与本服务的连接中断，请检查连接后重试。";
@@ -370,59 +349,13 @@ loginForm.addEventListener("submit", async (event) => {
   }
 });
 
-for (const radio of document.querySelectorAll('input[name="content"]')) {
-  radio.addEventListener("change", () => {
-    state.draft = radio.value === "tailscale";
-    state.justSaved = false;
-    state.saveFailed = false;
-    render();
-  });
-}
-
-$("content-undo").addEventListener("click", () => {
-  state.draft = null;
-  state.saveFailed = false;
-  render();
-});
-
-$("content-save").addEventListener("click", async () => {
-  if (state.saving || !state.sub) return;
-  const m = model();
-  const firstChoice = !state.sub.tailscale_choice_saved;
-  state.saving = true;
-  render();
-  try {
-    const response = await fetch("api/subscription", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tailscale_enabled: m.chosen }),
-      cache: "no-store",
-    });
-    if (!response.ok) throw new Error("save failed");
-    state.sub = await response.json();
-    state.draft = null;
-    state.saveFailed = false;
-    state.justSaved = !firstChoice;
-  } catch {
-    state.saveFailed = true;
-  } finally {
-    state.saving = false;
-    render();
-  }
-});
-
-$("url-toggle").addEventListener("click", () => {
-  state.urlOpen = !state.urlOpen;
-  render();
-});
-
-function selectUrl() {
+function selectUrl(element) {
   const range = document.createRange();
-  range.selectNodeContents(subscriptionUrl);
+  range.selectNodeContents(element);
   const selection = getSelection();
   selection.removeAllRanges();
   selection.addRange(range);
-  subscriptionUrl.focus();
+  element.focus();
 }
 
 function legacyCopy(text) {
@@ -439,40 +372,39 @@ function legacyCopy(text) {
   }
 }
 
-$("copy-subscription").addEventListener("click", async () => {
-  const url = state.sub?.url;
-  if (!url) return;
-  let copied = false;
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(url);
-      copied = true;
-    } else {
-      copied = legacyCopy(url);
+for (const card of linkCards) {
+  card.toggle.addEventListener("click", () => {
+    card.expanded = !card.expanded;
+    render();
+  });
+
+  card.copy.addEventListener("click", async () => {
+    const url = state.sub?.[`${card.mode}_url`];
+    if (!url) return;
+    card.copied = false;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(url);
+        card.copied = true;
+      } else {
+        card.copied = legacyCopy(url);
+      }
+    } catch {
+      card.copied = false;
     }
-  } catch {
-    copied = false;
-  }
-  state.copied = true; // Either way the user now has the link in hand.
-  state.copyFailed = !copied;
-  if (!copied) state.urlOpen = true;
-  render();
-  if (copied) toast("已复制订阅链接");
-  else selectUrl();
-});
+    state.linkUsed = true;
+    card.warning.hidden = card.copied;
+    if (!card.copied) card.expanded = true;
+    render();
+    if (card.copied) toast("已复制订阅链接");
+    else selectUrl(card.url);
+  });
 
-download.addEventListener("click", () => {
-  state.copied = true;
-  render();
-});
-
-// Remember explicit toggles so automatic opening never fights the user.
-guide?.querySelector("summary").addEventListener("click", () => {
-  state.guideTouched = true;
-});
-tailscaleGuide?.querySelector("summary").addEventListener("click", () => {
-  state.tailscaleGuideTouched = true;
-});
+  card.download.addEventListener("click", () => {
+    state.linkUsed = true;
+    render();
+  });
+}
 
 render();
 loadStatus();

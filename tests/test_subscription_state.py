@@ -34,12 +34,35 @@ class SubscriptionStateTests(unittest.TestCase):
             "[]",
             '{"key":"private-key"}',
             json.dumps({"key": "x" * 43, "tailscale_enabled": "private-value"}),
+            json.dumps({"key": "x" * 43, "profile_secret": "private-value"}),
         ):
             self.path.write_text(text)
             with self.subTest(text=text), self.assertRaises(ValueError) as caught:
                 SubscriptionStore(self.path).load()
             self.assertEqual(self.path.read_text(), text)
             self.assertNotIn("private-", str(caught.exception))
+
+    def test_legacy_state_acquires_independent_stable_profile_keys(self):
+        legacy_key = "x" * 43
+        self.path.parent.mkdir()
+        self.path.write_text(json.dumps({"key": legacy_key, "tailscale_enabled": True}))
+
+        store = SubscriptionStore(self.path)
+        migrated = store.load()
+        proxy_key = migrated.profile_key(False)
+        tailscale_key = migrated.profile_key(True)
+        self.assertEqual(len({legacy_key, proxy_key, tailscale_key}), 3)
+        self.assertEqual(migrated.key, legacy_key)
+        self.assertTrue(migrated.tailscale_enabled)
+        self.assertNotIn(migrated.profile_secret, repr(migrated))
+        self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
+        store.set_enabled(False)
+
+        restarted = SubscriptionStore(self.path).load()
+        self.assertEqual(restarted.key, legacy_key)
+        self.assertFalse(restarted.tailscale_enabled)
+        self.assertEqual(restarted.profile_key(False), proxy_key)
+        self.assertEqual(restarted.profile_key(True), tailscale_key)
 
     def test_save_failure_preserves_previous_state(self):
         from unittest.mock import patch

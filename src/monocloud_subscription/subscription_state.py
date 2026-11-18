@@ -1,11 +1,12 @@
-"""Small private state for stable subscription URLs and the Tailscale toggle."""
+"""Private state for stable subscription credentials and legacy settings."""
 
+import hmac
 import json
 import os
 import re
 import secrets
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 
@@ -19,7 +20,12 @@ def valid_subscription_key(value: object) -> bool:
 @dataclass(frozen=True)
 class SubscriptionState:
     key: str = field(repr=False)
+    profile_secret: str = field(repr=False)
     tailscale_enabled: bool | None = None
+
+    def profile_key(self, tailscale: bool) -> str:
+        purpose = b"clash-tailscale" if tailscale else b"clash-proxy"
+        return hmac.digest(self.profile_secret.encode(), purpose, "sha256").hex()
 
 
 class SubscriptionStore:
@@ -30,7 +36,9 @@ class SubscriptionStore:
         try:
             values = json.loads(self.path.read_text(encoding="utf-8"))
         except FileNotFoundError:
-            state = SubscriptionState(secrets.token_urlsafe(32))
+            state = SubscriptionState(
+                secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+            )
             self._save(state)
             return state
         except (OSError, ValueError):
@@ -42,11 +50,18 @@ class SubscriptionStore:
         enabled = values.get("tailscale_enabled")
         if enabled is not None and type(enabled) is not bool:
             raise ValueError("Invalid subscription state.")
-        return SubscriptionState(values["key"], enabled)
+        if "profile_secret" not in values:
+            state = SubscriptionState(values["key"], secrets.token_urlsafe(32), enabled)
+            self._save(state)
+            return state
+        profile_secret = values["profile_secret"]
+        if not valid_subscription_key(profile_secret):
+            raise ValueError("Invalid subscription state.")
+        return SubscriptionState(values["key"], profile_secret, enabled)
 
     def set_enabled(self, enabled: bool) -> None:
         state = self.load()
-        self._save(SubscriptionState(state.key, enabled))
+        self._save(replace(state, tailscale_enabled=enabled))
 
     def _save(self, state: SubscriptionState) -> None:
         temporary = None
@@ -57,7 +72,11 @@ class SubscriptionStore:
             ) as file:
                 temporary = Path(file.name)
                 json.dump(
-                    {"key": state.key, "tailscale_enabled": state.tailscale_enabled},
+                    {
+                        "key": state.key,
+                        "profile_secret": state.profile_secret,
+                        "tailscale_enabled": state.tailscale_enabled,
+                    },
                     file,
                 )
             os.replace(temporary, self.path)

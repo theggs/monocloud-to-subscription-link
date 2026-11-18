@@ -3,6 +3,7 @@
 import base64
 import secrets
 from dataclasses import replace
+from datetime import UTC, datetime
 from importlib.resources import files
 from urllib.parse import urlsplit
 
@@ -14,14 +15,24 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictBool
 
 from monocloud_subscription.config import Config
 from monocloud_subscription.monocloud import (
+    SIGN_OUT_REASONS,
     AuthenticationError,
     MonoCloudClient,
     MonoCloudError,
     OAuthConfigurationError,
 )
-from monocloud_subscription.subscription import generate_subscription
+from monocloud_subscription.subscription import (
+    fetch_subscription_catalog,
+    generate_subscription,
+)
 from monocloud_subscription.subscription_state import SubscriptionStore
 from monocloud_subscription.tokens import TokenStore
+
+_SUBSCRIPTION_MODES = {
+    "clash.yaml": None,
+    "clash-proxy.yaml": False,
+    "clash-tailscale.yaml": True,
+}
 
 
 class LoginRequest(BaseModel):
@@ -167,8 +178,7 @@ def create_app(
             return error("not_found", 404)
         return Response(resources.joinpath(name).read_bytes(), media_type=types[name])
 
-    @app.get("/api/status")
-    def status(verify: bool = False):
+    def account_status(verify: bool, *, include_nodes: bool = False):
         try:
             token = store.load()
         except ValueError:
@@ -179,23 +189,47 @@ def create_app(
             ),
             "token_saved": token is not None,
         }
-        if verify:
-            state = "signed_out"
-            names = []
-            if token is not None:
-                try:
-                    with httpx.Client(transport=transport) as http:
+        if not verify:
+            return result
+        state = "signed_out"
+        names = []
+        node_count = None
+        if token is not None:
+            try:
+                with httpx.Client(transport=transport) as http:
+                    if include_nodes:
+                        plans, nodes = fetch_subscription_catalog(config, http)
+                        node_count = len(nodes)
+                    else:
                         plans = MonoCloudClient(
                             config.monocloud, http, token_store=store
                         ).fetch_plans(token)
-                    state = "connected"
-                    names = [plan.name for plan in plans]
-                except AuthenticationError:
-                    state = "expired"
-                except MonoCloudError:
+                state = "connected"
+                names = [plan.name for plan in plans]
+            except AuthenticationError as exc:
+                state = "expired"
+                if (
+                    include_nodes
+                    and exc.status == 403
+                    and exc.code not in SIGN_OUT_REASONS
+                ):
                     state = "unavailable"
-            result.update(account_state=state, plan_count=len(names), plan_names=names)
+            except MonoCloudError:
+                state = "unavailable"
+        result.update(account_state=state, plan_count=len(names), plan_names=names)
+        if include_nodes:
+            result.update(
+                node_count=node_count, refreshed_at=datetime.now(UTC).isoformat()
+            )
         return result
+
+    @app.get("/api/status")
+    def status(verify: bool = False):
+        return account_status(verify)
+
+    @app.post("/api/refresh")
+    def refresh_account():
+        return account_status(True, include_nodes=True)
 
     @app.post("/api/login")
     def login(credentials: LoginRequest):
@@ -224,14 +258,17 @@ def create_app(
         state = subscriptions.load()
         key = config.subscription_key or state.key
         base = config.server.public_url or str(request.base_url).rstrip("/")
+        path = f"{base}/subscriptions"
         return {
-            "url": f"{base}/subscriptions/{key}/clash.yaml",
+            "url": f"{path}/{key}/clash.yaml",
+            "proxy_url": f"{path}/{state.profile_key(False)}/clash-proxy.yaml",
+            "tailscale_url": f"{path}/{state.profile_key(True)}/clash-tailscale.yaml",
             "tailscale_enabled": (
                 state.tailscale_enabled
                 if state.tailscale_enabled is not None
                 else config.tailscale.enabled
             ),
-            # The page asks for an explicit first choice until one is saved.
+            # Retained for clients managing the original clash.yaml link.
             "tailscale_choice_saved": state.tailscale_enabled is not None,
         }
 
@@ -250,20 +287,28 @@ def create_app(
         except ValueError:
             return error("subscription_state_save_failed", 500)
 
-    @app.api_route("/subscriptions/{key}/clash.yaml", methods=["GET", "HEAD"])
-    def download(key: str):
+    @app.api_route("/subscriptions/{key}/{filename}", methods=["GET", "HEAD"])
+    def download(key: str, filename: str):
+        if filename not in _SUBSCRIPTION_MODES:
+            return error("not_found", 404)
         try:
             state = subscriptions.load()
         except ValueError:
             return error("subscription_state_unavailable", 500)
-        expected_key = config.subscription_key or state.key
+        enabled = _SUBSCRIPTION_MODES[filename]
+        expected_key = (
+            config.subscription_key or state.key
+            if enabled is None
+            else state.profile_key(enabled)
+        )
         if not secrets.compare_digest(key.encode(), expected_key.encode()):
             return error("not_found", 404)
-        enabled = (
-            state.tailscale_enabled
-            if state.tailscale_enabled is not None
-            else config.tailscale.enabled
-        )
+        if enabled is None:
+            enabled = (
+                state.tailscale_enabled
+                if state.tailscale_enabled is not None
+                else config.tailscale.enabled
+            )
         effective = replace(
             config, tailscale=replace(config.tailscale, enabled=enabled)
         )
@@ -277,7 +322,7 @@ def create_app(
         return Response(
             content,
             media_type="application/yaml",
-            headers={"Content-Disposition": 'attachment; filename="clash.yaml"'},
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
     return app

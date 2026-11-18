@@ -220,8 +220,10 @@ beyond loopback requires the password. **Always set `MONOCLOUD_WEB_PASSWORD` whe
 using a reverse proxy or tunnel, even if the application listens on loopback.**
 A local proxy can make external requests appear local; the Host-header check
 does not protect an unauthenticated backend behind such a proxy.
-Native client subscription downloads use
-the secret URL path, independently of management Basic auth.
+Native client subscription downloads use a secret URL path, independently of
+management Basic auth. The management page displays separate proxy-only and
+proxy with Tailscale links. The credential for each link grants access to that
+configuration alone.
 
 ## Listen address and client URL
 
@@ -276,8 +278,9 @@ URL; that access method is not selected by the application.
 ## Runtime state and official templates
 
 Preserve the configured `data_dir` and any separately configured `token_file`.
-`subscription.json` stores the stable random URL credential and saved Tailscale
-switch override. Losing it changes automatically generated client URLs. Run one
+`subscription.json` stores the secret used to derive both current subscription
+credentials, plus the original link's credential and saved Tailscale choice.
+Losing this file changes automatically generated client URLs. Run one
 application worker for this file store; path/permission semantics are described
 in the README's [configuration section](../README.md#configuration-and-private-data).
 

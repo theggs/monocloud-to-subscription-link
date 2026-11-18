@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from dataclasses import replace
+from datetime import UTC, datetime
 from html.parser import HTMLParser
 from pathlib import Path
 from unittest.mock import patch
@@ -363,28 +364,46 @@ class SubscriptionWebTests(unittest.IsolatedAsyncioTestCase):
         client.auth = ("admin", "constructed-admin")
         details = await self.details(client)
         self.assertFalse(details["tailscale_enabled"])
-        path = httpx.URL(details["url"]).raw_path.decode()
         client.auth = None
         with patch(
             "monocloud_subscription.web.generate_subscription",
             return_value="mode: rule\nrules: [MATCH,DIRECT]\n",
         ) as generate:
-            response = await client.get(path)
-            self.assertEqual(response.status_code, 200)
-            self.assertIn("mode: rule", response.text)
-            self.assertEqual(response.headers["cache-control"], "no-store")
-            self.assertIn("yaml", response.headers["content-type"])
-            head = await client.head(path)
-            self.assertEqual(head.status_code, 200)
-            self.assertEqual(head.content, b"")
-            self.assertEqual(generate.call_count, 2)
+            for field, filename in (
+                ("url", "clash.yaml"),
+                ("proxy_url", "clash-proxy.yaml"),
+                ("tailscale_url", "clash-tailscale.yaml"),
+            ):
+                path = httpx.URL(details[field]).raw_path.decode()
+                self.assertTrue(path.endswith(f"/{filename}"))
+                response = await client.get(path)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("mode: rule", response.text)
+                self.assertEqual(response.headers["cache-control"], "no-store")
+                self.assertIn("yaml", response.headers["content-type"])
+                self.assertIn(filename, response.headers["content-disposition"])
+                head = await client.head(path)
+                self.assertEqual(head.status_code, 200)
+                self.assertEqual(head.content, b"")
+                wrong = f"/subscriptions/wrong/{filename}"
+                self.assertEqual((await client.get(wrong)).status_code, 404)
+                self.assertEqual((await client.head(wrong)).status_code, 404)
+            proxy_path = httpx.URL(details["proxy_url"]).path
+            tailscale_path = httpx.URL(details["tailscale_url"]).path
+            legacy_path = httpx.URL(details["url"]).path
             for wrong in (
-                "/subscriptions/wrong/clash.yaml",
-                path.replace("clash.yaml", "surge.conf"),
+                proxy_path.replace("clash-proxy.yaml", "clash-tailscale.yaml"),
+                tailscale_path.replace("clash-tailscale.yaml", "clash-proxy.yaml"),
+                legacy_path.replace("clash.yaml", "clash-tailscale.yaml"),
+            ):
+                self.assertEqual((await client.get(wrong)).status_code, 404)
+            self.assertEqual(generate.call_count, 6)
+            for wrong in (
+                path.replace("clash-tailscale.yaml", "surge.conf"),
                 "/subscriptions",
             ):
                 self.assertEqual((await client.get(wrong)).status_code, 404)
-            self.assertEqual(generate.call_count, 2)
+            self.assertEqual(generate.call_count, 6)
         self.assertEqual((await client.get("/api/subscription")).status_code, 401)
         self.assertEqual((await client.get("/")).status_code, 401)
 
@@ -457,6 +476,19 @@ class SubscriptionWebTests(unittest.IsolatedAsyncioTestCase):
             details["url"],
             "https://subscriptions.example.invalid/mono/subscriptions/constructed-key-01234567890123456789/clash.yaml",
         )
+        keys = {httpx.URL(details["url"]).path.split("/")[-2]}
+        for field, filename in (
+            ("proxy_url", "clash-proxy.yaml"),
+            ("tailscale_url", "clash-tailscale.yaml"),
+        ):
+            self.assertTrue(
+                details[field].startswith(
+                    "https://subscriptions.example.invalid/mono/subscriptions/"
+                )
+            )
+            self.assertTrue(details[field].endswith(f"/{filename}"))
+            keys.add(httpx.URL(details[field]).path.split("/")[-2])
+        self.assertEqual(len(keys), 3)
 
     async def test_generation_failures_do_not_echo_secrets(self):
         from monocloud_subscription.monocloud import AuthenticationError
@@ -491,7 +523,7 @@ class SubscriptionWebTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("private-secret", response.text)
         self.assertEqual(await self.details(client), before)
 
-    async def test_download_composes_real_generator_snapshot_and_all_nodes(self):
+    async def test_both_subscriptions_download_without_saving_a_choice(self):
         import hashlib
         import json
 
@@ -547,22 +579,151 @@ class SubscriptionWebTests(unittest.IsolatedAsyncioTestCase):
             transport=httpx.ASGITransport(app=app), base_url="http://localhost"
         ) as client:
             details = await self.details(client)
-            response = await client.get(details["url"])
+            self.assertFalse(details["tailscale_choice_saved"])
+            response = await client.get(details["proxy_url"])
             self.assertEqual(response.status_code, 200)
             plain = yaml.safe_load(response.text)
             self.assertEqual(len(plain["proxies"]), 2)
             self.assertEqual(plain["proxies"][0]["server"], "node.example.invalid")
             self.assertNotIn("tailscale", response.text.lower())
-            await client.post("/api/subscription", json={"tailscale_enabled": True})
-            enabled = yaml.safe_load((await client.get(details["url"])).text)
+            response = await client.get(details["tailscale_url"])
+            self.assertEqual(response.status_code, 200)
+            enabled = yaml.safe_load(response.text)
             self.assertEqual(enabled["proxies"][-1]["type"], "tailscale")
+            self.assertEqual(enabled["proxies"][:-1], plain["proxies"])
             self.assertEqual(enabled["rules"][-len(plain["rules"]) :], plain["rules"])
-            self.assertEqual((await self.details(client))["url"], details["url"])
+            for legacy_enabled, legacy in ((True, enabled), (False, plain)):
+                await client.post(
+                    "/api/subscription", json={"tailscale_enabled": legacy_enabled}
+                )
+                self.assertEqual(
+                    yaml.safe_load((await client.get(details["url"])).text), legacy
+                )
+                for field, expected in (
+                    ("proxy_url", plain),
+                    ("tailscale_url", enabled),
+                ):
+                    self.assertEqual(
+                        (await self.details(client))[field], details[field]
+                    )
+                    self.assertEqual(
+                        yaml.safe_load((await client.get(details[field])).text),
+                        expected,
+                    )
 
 
 class VerifiedAccountTests(unittest.IsolatedAsyncioTestCase):
     setUp = LoginPageTests.setUp
     client = LoginPageTests.client
+
+    async def test_local_page_is_network_free_until_manual_catalog_refresh(self):
+        from monocloud_subscription.tokens import Session
+
+        self.config = replace(
+            self.config, monocloud=replace(self.config.monocloud, api_version="v2")
+        )
+        store = TokenStore(self.config.token_file)
+        store.save_session(Session("old-token", "private-refresh-token", 1))
+
+        def upstream(request):
+            path = request.url.path
+            self.requests.append((request.method, path))
+            if path == "/oauth/token":
+                return httpx.Response(
+                    200, json={"access_token": "new-token", "expires_in": 3600}
+                )
+            self.assertEqual(request.headers["Authorization"], "Bearer new-token")
+            if path == "/api/v2/services":
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": [
+                            {"id": 1, "connectable": True, "plan": {"name": "Example"}}
+                        ]
+                    },
+                )
+            self.assertEqual(path, "/api/v2/servers")
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "service_id": 1,
+                            "servers": [
+                                {
+                                    "protocol": "shadowsocks",
+                                    "host": "node.example.invalid",
+                                    "port": 443,
+                                    "params": {"method": "aes-128-gcm"},
+                                    "auth": {"password": "private-node-password"},
+                                },
+                                {"protocol": "monolite"},
+                            ],
+                        }
+                    ]
+                },
+            )
+
+        app = create_app(self.config, transport=httpx.MockTransport(upstream))
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://localhost"
+        ) as client:
+            self.assertIn("刷新账户与节点", (await client.get("/")).text)
+            self.assertTrue((await client.get("/api/status")).json()["token_saved"])
+            links = (await client.get("/api/subscription")).json()
+            self.assertIn("proxy_url", links)
+            self.assertIn("tailscale_url", links)
+            blocked = await client.post(
+                "/api/refresh", json={}, headers={"Origin": "https://untrusted.invalid"}
+            )
+            self.assertEqual(blocked.status_code, 403)
+            self.assertEqual(self.requests, [])
+
+            before = datetime.now(UTC)
+            response = await client.post("/api/refresh", json={})
+            self.assertEqual(response.status_code, 200)
+            result = response.json()
+            self.assertEqual(result["account_state"], "connected")
+            self.assertEqual(result["plan_names"], ["Example"])
+            self.assertEqual(result["node_count"], 1)
+            self.assertGreaterEqual(
+                datetime.fromisoformat(result["refreshed_at"]), before
+            )
+            self.assertNotIn("private-", response.text)
+            self.assertNotIn("node.example.invalid", response.text)
+            self.assertEqual(
+                self.requests,
+                [
+                    ("POST", "/oauth/token"),
+                    ("GET", "/api/v2/services"),
+                    ("GET", "/api/v2/servers"),
+                ],
+            )
+            self.assertEqual(store.load(), "new-token")
+
+    async def test_manual_refresh_reports_signed_out_expiry_and_unavailability(self):
+        response = await self.client().post("/api/refresh", json={})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["account_state"], "signed_out")
+        self.assertEqual(self.requests, [])
+
+        TokenStore(self.config.token_file).save("constructed-token")
+        for upstream_status, state in (
+            (401, "expired"),
+            (403, "unavailable"),
+            (503, "unavailable"),
+        ):
+            with self.subTest(upstream_status=upstream_status):
+                response = await self.client(
+                    status=upstream_status,
+                    payload={"message": "private-upstream-error"},
+                ).post("/api/refresh", json={})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["account_state"], state)
+                self.assertIsNotNone(
+                    datetime.fromisoformat(response.json()["refreshed_at"]).tzinfo
+                )
+                self.assertNotIn("private-upstream-error", response.text)
 
     async def test_page_embeds_clash_mi_guide_with_optional_overlay(self):
         page = await self.client().get("/")
@@ -577,11 +738,16 @@ class VerifiedAccountTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('id="guide-surge"', page.text)
         self.assertNotIn('id="guide-sing-box"', page.text)
 
-    async def test_page_is_a_client_neutral_four_step_flow(self):
+    async def test_page_presents_both_downloads_without_a_choice_step(self):
         page = (await self.client().get("/")).text
         self.assertIn("<h1>设置你的代理订阅</h1>", page)
-        for step in ("step-account", "step-content", "step-link", "step-client"):
+        for step in ("step-account", "step-link", "step-client"):
             self.assertIn(f'id="{step}"', page)
+        self.assertNotIn('id="step-content"', page)
+        self.assertNotIn('id="content-save"', page)
+        for mode, label in (("proxy", "仅代理"), ("tailscale", "代理 + Tailscale")):
+            self.assertIn(f'data-subscription="{mode}"', page)
+            self.assertIn(label, page)
         self.assertIn("Surge、sing-box 格式尚未支持", page)
         self.assertNotIn("admin</", page)
         # Client names belong only to the mihomo link row and the client guide.
