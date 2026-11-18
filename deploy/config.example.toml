@@ -4,9 +4,14 @@ data_dir = "/data"
 # template_dir = "/templates"
 
 [monocloud]
+api_version = "v2"
 # Supply the client's OAuth credentials privately before browser login.
 # client_id = ""
 # client_secret = ""
+# Configure both privately if the v2 server requires encrypted responses.
+# response_key_id = ""
+# response_key = "" # Standard base64, 32 decoded bytes.
+# request_context = "" # Optional pre-encoded request-context header.
 
 [clash]
 mixed_port = 7890

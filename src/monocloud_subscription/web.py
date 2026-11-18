@@ -140,9 +140,11 @@ def create_app(
     async def invalid_input(request, exception):
         # Framework defaults include input values, which can contain passwords.
         return error(
-            "invalid_login_input"
-            if request.url.path == "/api/login"
-            else "invalid_input",
+            (
+                "invalid_login_input"
+                if request.url.path == "/api/login"
+                else "invalid_input"
+            ),
             422,
         )
 
@@ -183,9 +185,9 @@ def create_app(
             if token is not None:
                 try:
                     with httpx.Client(transport=transport) as http:
-                        plans = MonoCloudClient(config.monocloud, http).fetch_plans(
-                            token
-                        )
+                        plans = MonoCloudClient(
+                            config.monocloud, http, token_store=store
+                        ).fetch_plans(token)
                     state = "connected"
                     names = [plan.name for plan in plans]
                 except AuthenticationError:
@@ -203,7 +205,7 @@ def create_app(
             return error("invalid_login_input", 422)
         try:
             with httpx.Client(transport=transport) as http:
-                token = MonoCloudClient(config.monocloud, http).login(
+                session = MonoCloudClient(config.monocloud, http).login_session(
                     credentials.email.strip(), credentials.password.get_secret_value()
                 )
         except OAuthConfigurationError:
@@ -213,7 +215,7 @@ def create_app(
         except MonoCloudError:
             return error("upstream_unavailable", 502)
         try:
-            store.save(token)
+            store.save_session(session)
         except ValueError:
             return error("token_save_failed", 500)
         return {"token_saved": True}

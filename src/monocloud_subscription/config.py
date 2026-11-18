@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 
 from monocloud_subscription.clash import ClashSettings, TailscaleSettings
 from monocloud_subscription.monocloud import MonoCloudSettings
+from monocloud_subscription.server_list import decode_base64
 from monocloud_subscription.subscription_state import valid_subscription_key
 
 
@@ -67,12 +68,33 @@ def load_config(path: Path) -> Config:
         "client_version",
         "client_id",
         "client_secret",
+        "api_version",
+        "response_key_id",
+        "response_key",
+        "request_context",
+        "client_platform",
+        "os_version",
+        "device_model",
+        "device_model_name",
     ):
         if key in settings:
             if not isinstance(settings[key], str):
                 raise ValueError(f"monocloud.{key} must be a string.")
             options[key] = settings[key]
     api = MonoCloudSettings(**options)
+    if api.api_version not in ("v2", "legacy"):
+        raise ValueError("monocloud.api_version must be v2 or legacy.")
+    if bool(api.response_key_id) != bool(api.response_key):
+        raise ValueError("Both MonoCloud response key settings are required together.")
+    if api.response_key:
+        try:
+            decode_base64(api.response_key, 32)
+            if any(ord(c) <= 32 or ord(c) >= 127 for c in api.response_key_id):
+                raise ValueError
+        except ValueError:
+            raise ValueError(
+                "Invalid private MonoCloud response key settings."
+            ) from None
     try:
         url = urlsplit(api.base_url)
         if (
@@ -89,7 +111,15 @@ def load_config(path: Path) -> Config:
         raise ValueError(
             "monocloud.base_url must be an HTTPS API URL without credentials."
         ) from None
-    for value in (api.user_agent, api.client_version):
+    for value in (
+        api.user_agent,
+        api.client_version,
+        api.request_context,
+        api.client_platform,
+        api.os_version,
+        api.device_model,
+        api.device_model_name,
+    ):
         if not value.isascii() or any(
             ord(character) < 32 or ord(character) == 127 for character in value
         ):

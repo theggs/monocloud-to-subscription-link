@@ -1,5 +1,30 @@
 # Clash/mihomo verification
 
+## MonoCloud 1.5 account-protocol adaptation (2026-11-18)
+
+The v2 account client is covered by constructed service/server records, an
+independent encrypted-response fixture, tamper and downgrade tests, refresh-token
+rotation, concurrent-client refresh and complete subscription rendering tests.
+The protocol construction was checked against the locally supplied 1.5.0 Linux
+application; no proprietary key values, account tokens or node records are included.
+
+With private v2 settings, a live check confirmed browser login, saved-session
+reuse, service discovery, and authentication and decryption of the server list.
+The tested account contained both Shadowsocks and MonoLite nodes, and the public
+manifest omitted `Clash_ss`. The service omitted the MonoLite nodes and verified
+the official template against its pinned size and SHA-256. The existing protected
+URL returned HTTP 200 with the compatible Shadowsocks nodes, plan groups, and
+7,486 rules. The downloaded YAML passed `mihomo -t` on Linux with mihomo 1.19.22.
+The Shadowsocks nodes tested in an isolated mihomo process successfully proxied
+HTTPS requests.
+Live refresh-token rotation and device acceptance for 1.5 are pending.
+
+On Linux x86-64 with CPython 3.14.4 and uv 0.11.6, `uv lock --check` and
+`uv sync --locked` passed with the existing lockfile. All 124 tests passed in
+the locked environment, including the two loopback HTTP tests with simulated
+accounts. Ruff lint and format checks, validation of both example configurations,
+and the wheel and source distribution builds also passed.
+
 ## Device acceptance completed (2026-11-02–03)
 
 The user tested **Clash Mi 1.0.31.1703 on iPhone** within the controlled home LAN.
@@ -57,9 +82,9 @@ user-confirmed phone results above.
 The development machine receives a Cloudflare challenge from the official asset
 host. Test bytes were obtained through an authorized read-only workstation request
 and reverified locally. The explicit `template_dir` configuration supports that
-operator-provided official snapshot, with size/SHA-256 checks intact. There is no
-implicit fallback, workstation dependency or claim of automatic snapshot freshness.
-Normal HTTPS downloads still require access to the official asset host.
+operator-provided official snapshot, with size/SHA-256 checks intact. Network
+downloads require access to the official asset host. The pinned download applies
+when a valid manifest omits `Clash_ss`.
 
 ## Startup issues found and resolved
 

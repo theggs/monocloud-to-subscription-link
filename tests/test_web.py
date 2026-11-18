@@ -16,12 +16,34 @@ from monocloud_subscription.web import create_app
 
 
 class LoginPageTests(unittest.IsolatedAsyncioTestCase):
+    async def test_v2_login_persists_refresh_state_without_returning_credentials(self):
+        self.config = replace(
+            self.config, monocloud=replace(self.config.monocloud, api_version="v2")
+        )
+        response = await self.client(
+            payload={
+                "access_token": "synthetic-access",
+                "refresh_token": "synthetic-refresh",
+                "expires_in": 3600,
+            }
+        ).post(
+            "/api/login",
+            json={"email": "user@example.invalid", "password": "synthetic-password"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            TokenStore(self.config.token_file).load_session().refresh_token,
+            "synthetic-refresh",
+        )
+        for value in ("synthetic-access", "synthetic-refresh", "synthetic-password"):
+            self.assertNotIn(value, response.text)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         path = Path(self.temp.name) / "config.toml"
         path.write_text(
-            'data_dir = "data"\n[monocloud]\nclient_id = "fake-client"\nclient_secret = "fake-client-secret"\n',
+            'data_dir = "data"\n[monocloud]\napi_version = "legacy"\nclient_id = "fake-client"\nclient_secret = "fake-client-secret"\n',
             encoding="utf-8",
         )
         self.config = load_config(path)
@@ -310,11 +332,12 @@ class LoginPageTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_storage_failure_is_sanitized_and_preserves_token(self):
         TokenStore(self.config.token_file).save("fake-old-token")
+        client = self.client()
         with patch(
-            "monocloud_subscription.web.TokenStore.save",
-            side_effect=ValueError("fake-private-storage"),
+            "monocloud_subscription.tokens.os.replace",
+            side_effect=OSError("fake-private-storage"),
         ):
-            response = await self.client().post(
+            response = await client.post(
                 "/api/login",
                 json={"email": "user@example.invalid", "password": "fake-password"},
             )

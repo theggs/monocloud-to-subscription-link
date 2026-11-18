@@ -6,6 +6,25 @@ from monocloud_subscription.config import load_config
 
 
 class ConfigTests(unittest.TestCase):
+    def test_v2_private_settings_are_validated_without_exposing_values(self):
+        import base64
+
+        self.path.write_text(
+            'data_dir="data"\n[monocloud]\napi_version="v2"\n'
+            'response_key_id="test-key"\nresponse_key="'
+            + base64.b64encode(bytes(range(32))).decode()
+            + '"\n'
+        )
+        settings = load_config(self.path).monocloud
+        self.assertEqual(settings.response_key_id, "test-key")
+        self.assertNotIn(settings.response_key, repr(settings))
+        self.path.write_text(
+            'data_dir="data"\n[monocloud]\napi_version="private-invalid"\n'
+        )
+        with self.assertRaises(ValueError) as caught:
+            load_config(self.path)
+        self.assertNotIn("private-invalid", str(caught.exception))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

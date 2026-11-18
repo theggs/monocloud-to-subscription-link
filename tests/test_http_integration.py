@@ -93,6 +93,7 @@ class HttpIntegrationTests(unittest.TestCase):
         self.addCleanup(self.stop_server)
         # Only this in-process fixture uses HTTP. User configuration still requires HTTPS.
         self.settings = MonoCloudSettings(
+            api_version="legacy",
             base_url=f"http://127.0.0.1:{self.server.server_port}",
             client_id="fake-client",
             client_secret="fake-client-secret",

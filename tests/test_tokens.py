@@ -10,6 +10,26 @@ from monocloud_subscription.tokens import TokenStore
 
 
 class TokenTests(unittest.TestCase):
+    def test_oversized_expiry_is_reported_as_invalid_storage(self):
+        self.path.parent.mkdir()
+        self.path.write_text(
+            json.dumps({"access_token": "synthetic-token", "expires_at": 10**400})
+        )
+        with self.assertRaisesRegex(ValueError, "Invalid token file"):
+            self.store.load_session()
+
+    def test_refresh_state_round_trip_and_old_file_compatibility(self):
+        from monocloud_subscription.tokens import Session
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = TokenStore(Path(directory) / "token.json")
+            store.save("legacy-access")
+            self.assertIsNone(store.load_session().refresh_token)
+            session = Session("new-access", "new-refresh", 1800000000)
+            store.save_session(session)
+            self.assertEqual(store.load_session(), session)
+            self.assertEqual(store.load(), "new-access")
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

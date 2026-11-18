@@ -83,6 +83,20 @@ class TemplateTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     fetch_template(http, MonoCloudSettings())
 
+    def test_unlisted_template_must_match_the_pinned_digest(self):
+        paths = []
+
+        def handle(request):
+            paths.append(request.url.path)
+            if request.url.path.endswith("update.json"):
+                return httpx.Response(200, json={"templates": []})
+            return httpx.Response(200, content=b"x" * 243529)
+
+        with httpx.Client(transport=httpx.MockTransport(handle)) as http:
+            with self.assertRaises(ValueError):
+                fetch_template(http, MonoCloudSettings())
+        self.assertEqual(paths, ["/mono_go/update.json", "/mono_go/Clash_ss"])
+
     def test_rejects_invalid_or_changed_template_without_echoing_body(self):
         for content in (
             b"private-content: [",

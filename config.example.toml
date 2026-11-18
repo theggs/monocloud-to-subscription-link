@@ -11,14 +11,22 @@ data_dir = "data"
 
 [monocloud]
 base_url = "https://api.bluecloudworks.com"
-user_agent = "MonocloudGO-1.0.1"
-client_version = "1.0.1"
-# These request headers match the client used for read-only API verification.
-# Override them if the API's requirements change.
-# Client credentials are required only for password-grant login.
+api_version = "v2" # Set "legacy" explicitly for the old service/Shadowsocks API.
+user_agent = "MonocloudGO-1.5.0"
+client_version = "1.5.0"
+# Client credentials are required for login AND refresh-token requests.
 # Configure actual values privately; never commit them.
 # client_id = ""
 # client_secret = ""
+# Private response-encryption settings from the matching authorized client build.
+# response_key_id = ""
+# response_key = "" # Standard base64 encoding of the 32-byte shared response key.
+# Optional already-encoded request headers required by your deployment.
+# request_context = ""
+# client_platform = ""
+# os_version = ""
+# device_model = ""
+# device_model_name = ""
 
 [clash]
 mixed_port = 7890

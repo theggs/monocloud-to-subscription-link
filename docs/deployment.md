@@ -285,10 +285,10 @@ Tailscale device state belongs to the client, not this server. Keep the same
 client state directory across restarts and profile refreshes; follow the optional
 Tailscale section in the client guide for authorization and verification.
 
-Normal generation fetches the official manifest/template over HTTPS. If the host
-presents an automated-client challenge, the explicit `template_dir` option reads
-an operator-provided official snapshot containing `update.json` and `Clash_ss`.
-Size and SHA-256 checks still apply. This performs no automatic download, fallback
-or refresh; the operator must manage snapshot provenance/freshness. See the
-[verification record](clash-verification.md). Scheduled refresh and last-good
-publication remain separate work.
+Normal generation fetches the official manifest and template over HTTPS. If the
+manifest's template list omits `Clash_ss`, the service downloads the asset from
+its known official URL and checks it against a pinned size and SHA-256. For an
+offline setup or a host that presents an automated-client challenge, configure
+`template_dir` with an operator-provided official snapshot containing
+`update.json` and `Clash_ss`. The service verifies the local asset against the
+local manifest. See the [verification record](clash-verification.md).

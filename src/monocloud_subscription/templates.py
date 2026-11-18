@@ -12,6 +12,11 @@ import yaml
 from monocloud_subscription.monocloud import MonoCloudSettings
 
 MANIFEST_URL = "https://static.monocloud.co/mono_go/update.json"
+_PINNED_CLASH_TEMPLATE = {
+    "url": "https://static.monocloud.co/mono_go/Clash_ss",
+    "size": 243529,
+    "sha256": "9e4edb4a7907e4ae6bd8b87f56e8c4fd283243a6c9f4c782377e821ba4a6351c",
+}
 
 
 def validate_template(template: object) -> dict:
@@ -92,7 +97,12 @@ def fetch_template(http: httpx.Client, settings: MonoCloudSettings) -> dict:
         response.raise_for_status()
         manifest = response.json()
         entries = manifest["templates"]
-        entry = next(item for item in entries if item["name"] == "Clash_ss")
+        if not isinstance(entries, list):
+            raise ValueError
+        entry = next(
+            (item for item in entries if item["name"] == "Clash_ss"),
+            _PINNED_CLASH_TEMPLATE,
+        )
         if not isinstance(entry["url"], str):
             raise ValueError
         url = urlsplit(entry["url"])
@@ -107,7 +117,7 @@ def fetch_template(http: httpx.Client, settings: MonoCloudSettings) -> dict:
             or hashlib.sha256(asset.content).hexdigest() != entry["sha256"]
         ):
             raise ValueError("MonoCloud template size or SHA-256 verification failed.")
-    except (httpx.HTTPError, KeyError, TypeError, StopIteration, ValueError):
+    except (httpx.HTTPError, KeyError, TypeError, ValueError):
         raise ValueError(
             "Cannot fetch or verify the official MonoCloud template."
         ) from None

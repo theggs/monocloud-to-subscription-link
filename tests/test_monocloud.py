@@ -24,6 +24,7 @@ class MonoCloudTests(unittest.TestCase):
         http = httpx.Client(transport=httpx.MockTransport(handle))
         self.addCleanup(http.close)
         settings = MonoCloudSettings(
+            api_version="legacy",
             client_id="test-client",
             client_secret="test-client-secret",
             client_version="test-version",
@@ -202,9 +203,14 @@ class MonoCloudTests(unittest.TestCase):
             )
 
         with httpx.Client(transport=httpx.MockTransport(handle)) as http:
-            nodes = MonoCloudClient(MonoCloudSettings(), http).fetch_all_nodes(
-                "test-token"
-            )
+            nodes = MonoCloudClient(
+                MonoCloudSettings(
+                    api_version="legacy",
+                    user_agent="MonocloudGO-1.0.1",
+                    client_version="1.0.1",
+                ),
+                http,
+            ).fetch_all_nodes("test-token")
         self.assertEqual([node.service_id for node in nodes], ["123", "124"])
         self.assertEqual(
             paths, ["/api/service", "/api/shadowsocks/123", "/api/shadowsocks/124"]

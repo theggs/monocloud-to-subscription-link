@@ -11,7 +11,14 @@ will handle proxy traffic and, when enabled, Tailscale connections directly.
 Subscriptions can be used with MonoCloud alone, without configuring or authorizing
 Tailscale. Tailscale-specific routes and DNS settings are included only when enabled.
 
-**Current status:** configuration checks, local token storage, password-grant login,
+**MonoCloud 1.5 adaptation:** live browser login, service discovery and authenticated
+server-list decryption have been verified. The protected subscription for a mixed
+Shadowsocks and MonoLite account downloaded successfully and passed mihomo
+configuration validation. Live refresh-token rotation and device acceptance for
+1.5 are pending. See the
+[verification results](docs/clash-verification.md#monocloud-15-account-protocol-adaptation-2026-11-18).
+
+**Original verification:** configuration checks, local token storage, password-grant login,
 service discovery, and node retrieval are implemented. The complete account workflow
 is tested against a local HTTP server using constructed credentials. Browser login
 and reuse of its saved token for service/node discovery have also been verified
@@ -35,7 +42,8 @@ uv run monocloud-subscription --help
 ```
 
 uv creates a project-specific `.venv/`. HTTP requests use httpx. FastAPI and Uvicorn
-serve the login page; PyYAML parses and serializes Clash configuration. Ruff is a
+serve the login page; PyYAML parses and serializes Clash configuration. cryptography
+provides X25519, HKDF-SHA256 and AES-256-GCM for the v2 node response. Ruff is a
 development dependency.
 
 ## Quick start
@@ -80,9 +88,13 @@ Configuration uses TOML. Supply its path explicitly with `--config`.
 | `subscription.key` | No | Private random URL-safe key override (32-128 characters); normally generated automatically. |
 | `token_file` | No | Token JSON path; defaults to `data_dir/token.json`. An explicit relative path resolves against the configuration file. |
 | `monocloud.base_url` | No | HTTPS API root; defaults to the researched MonoCloud API. |
-| `monocloud.user_agent` | No | User-Agent header, default `MonocloudGO-1.0.1` from the verified client. |
-| `monocloud.client_version` | No | X-Client-Version header, default `1.0.1`; an empty string omits it. |
-| `monocloud.client_id`, `monocloud.client_secret` | For login | OAuth client credentials. Not required to reuse a saved token. |
+| `monocloud.api_version` | No | `v2` (default) or explicit `legacy`; no automatic downgrade. |
+| `monocloud.user_agent` | No | User-Agent header, default `MonocloudGO-1.5.0`. |
+| `monocloud.client_version` | No | X-Client-Version header, default `1.5.0`; an empty string omits it. |
+| `monocloud.client_id`, `monocloud.client_secret` | For login/refresh | Private OAuth application credentials. |
+| `monocloud.response_key_id`, `monocloud.response_key` | For encrypted v2 nodes | Matching response key ID and standard-base64 32-byte shared key; supply both privately. |
+| `monocloud.request_context` | Deployment-dependent | Optional already-encoded `X-Request-Context`; not generated or fabricated by this service. |
+| `monocloud.client_platform`, `monocloud.os_version`, `monocloud.device_model`, `monocloud.device_model_name` | No | Optional already-encoded device headers, omitted when empty. |
 | `clash.mixed_port` | No | Client mixed proxy port, default `7890`; LAN access is disabled in generated configs. |
 | `tailscale.enabled` | No | Opt in to Tailscale, default `false`. |
 | `tailscale.hostname` | No | Client's Tailnet device name. |
@@ -107,10 +119,57 @@ and atomic replacement. Run one application worker for this local file store. An
 valid. On POSIX systems new token files have owner-only permissions; token updates
 replace the file atomically. Existing directory permissions are left unchanged;
 deployers should restrict private configuration and data directories. Atomic
-replacement is not a power-loss durability guarantee. Browser login saves only the returned access token; passwords and raw
+replacement is not a power-loss durability guarantee. Browser login saves the returned
+access token, optional refresh token and absolute expiry; passwords and raw
 API responses are not persisted. Local configuration containing OAuth client secrets
 should also be readable only by its owner. Do not put real credentials or generated
 subscriptions in tracked files or issue reports.
+
+### Upgrading account integration to MonoCloud 1.5
+
+Keep the existing private data directory, `subscription.json` and Tailscale state.
+Those determine existing subscription links and client identity. Upgrade dependencies
+with `uv sync --locked`, set `monocloud.api_version = "v2"` (the new default), and
+review old explicit User-Agent/version overrides. Sign in again through the browser
+to obtain a refreshable session. Old access-token-only files remain readable; they
+cannot be refreshed without signing in again.
+
+The new account transport uses `/api/v2/services` and `/api/v2/servers`. For encrypted
+server responses, configure `response_key_id` and `response_key` from your authorized
+private client research. Application secrets are intentionally absent from this
+repository. A fresh ephemeral X25519 key is used for each server-list request;
+the response is authenticated before its JSON is parsed. If no response key is
+configured, only a server that explicitly returns a plaintext v2 list can be used.
+Once encryption is requested, a plaintext response fails instead of downgrading.
+
+Servers may also enforce request-context or device-header policies. This service
+accepts explicit wire-format values but does not synthesize a native client's
+environment report. Missing required settings produce upstream errors; offline
+tests do not establish whether a particular deployment requires these headers.
+
+Only v2 `shadowsocks` nodes representable by the existing standard SS generator are
+exported. Mixed accounts keep their Shadowsocks nodes and omit other protocols,
+including MonoLite and Papaya. Each exported Shadowsocks node must pass validation
+for its connection fields, authentication options, and UDP settings. An account
+needs at least one supported Shadowsocks node to generate a subscription. SS2022
+requires a single base64 PSK of the method-specific size.
+
+Account login remains the main-account `/oauth/token` flow. Native sub-user login
+at `/oauth/sub-user/token` is not implemented. Template acquisition continues to
+use the existing `update.json` manifest or an explicit compatible snapshot. When
+the manifest's template list omits `Clash_ss`, the service downloads the official
+asset from its known URL and verifies it against a pinned size and SHA-256.
+The native client's `update.signed.json` app-update mechanism is not a replacement
+for the project's existing template download/verification contract.
+
+Refreshes are serialized across threads within the documented single application
+worker. Refreshed credentials are persisted before the protected request proceeds.
+Do not run multiple processes/workers against the same token file: cross-process
+refresh coordination is not implemented. Revoked/forbidden sessions require a new
+browser login; a rejected refresh is never retried automatically.
+Confirmed revocation and rejected refreshes atomically replace the token file with
+a re-login marker, so later requests and process restarts cannot reuse rejected
+credentials. A successful browser login replaces that marker with the new session.
 
 When enabled, Tailscale establishes its own underlying control/DERP/STUN and
 peer connections directly; the client network must permit them. No `dialer-proxy`

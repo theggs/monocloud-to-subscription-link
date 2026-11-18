@@ -11,15 +11,18 @@ from monocloud_subscription.tokens import TokenStore
 
 def generate_subscription(config: Config, http: httpx.Client) -> str:
     """Return complete YAML or fail without writing partial configuration."""
-    try:
-        token = TokenStore(config.token_file).load()
-    except ValueError:
-        raise AuthenticationError(
-            "Sign in through the web interface before downloading."
-        ) from None
-    client = MonoCloudClient(config.monocloud, http)
-    plans = client.fetch_plans(token)
-    nodes = client.fetch_all_nodes(token, [plan.service_id for plan in plans])
+    store = TokenStore(config.token_file)
+    # One consistent account snapshot, including a possible rotating refresh.
+    with store.locked():
+        try:
+            token = store.load()
+        except ValueError:
+            raise AuthenticationError(
+                "Sign in through the web interface before downloading."
+            ) from None
+        client = MonoCloudClient(config.monocloud, http, token_store=store)
+        plans = client.fetch_plans(token)
+        nodes = client.fetch_all_nodes(token, [plan.service_id for plan in plans])
     template = (
         load_template_snapshot(config.template_dir)
         if config.template_dir

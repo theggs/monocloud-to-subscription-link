@@ -8,6 +8,7 @@ import yaml
 from test_clash import TEMPLATE
 
 from monocloud_subscription.config import Config
+from monocloud_subscription.monocloud import MonoCloudSettings
 from monocloud_subscription.subscription import generate_subscription
 from monocloud_subscription.tokens import TokenStore
 
@@ -63,7 +64,11 @@ class SubscriptionTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            config = Config(root, root / "token.json")
+            config = Config(
+                root,
+                root / "token.json",
+                monocloud=MonoCloudSettings(api_version="legacy"),
+            )
             TokenStore(config.token_file).save("constructed-token")
             before = config.token_file.read_bytes()
             with httpx.Client(transport=httpx.MockTransport(handle)) as http:
@@ -83,7 +88,11 @@ class SubscriptionTests(unittest.TestCase):
     def test_missing_token_or_failed_discovery_does_not_produce_config(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            config = Config(root, root / "token.json")
+            config = Config(
+                root,
+                root / "token.json",
+                monocloud=MonoCloudSettings(api_version="legacy"),
+            )
             with httpx.Client(
                 transport=httpx.MockTransport(lambda r: httpx.Response(401))
             ) as http:

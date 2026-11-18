@@ -5,6 +5,7 @@ description = "Generate MonoCloud client subscriptions with Tailscale support."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "cryptography>=46,<51",
     "fastapi>=0.115,<1",
     "httpx[socks]>=0.28,<1",
     "pyyaml>=6,<7",
